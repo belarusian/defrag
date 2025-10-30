@@ -8,7 +8,7 @@ import os
 import re
 from typing import List, Optional, Tuple
 
-from .semantic import Concept, ConceptMatch, SemanticIndex
+from .semantic import SemanticIndex
 
 
 def find_section_in_markdown(content: str, section_name: str) -> Optional[Tuple[int, int]]:
@@ -134,7 +134,7 @@ def fix_document_references(
     fixable = [
         m
         for m in matches
-        if m.confidence >= 0.7 and m.physical_link_valid != True and m.suggested_link
+        if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
     ]
 
     if not fixable:
@@ -213,7 +213,7 @@ def fix_all_documents(
     # Group matches by doc
     docs_with_matches = set()
     for match in semantic_index.matches:
-        if match.confidence >= min_confidence and match.physical_link_valid != True:
+        if match.confidence >= min_confidence and not match.physical_link_valid:
             doc_concept = semantic_index.get_concept(match.doc_concept_id)
             if doc_concept:
                 docs_with_matches.add(doc_concept.source)
@@ -253,7 +253,7 @@ def preview_fix(doc_path: str, semantic_index: SemanticIndex, root_dir: str = ".
     fixable = [
         m
         for m in matches
-        if m.confidence >= 0.7 and m.physical_link_valid != True and m.suggested_link
+        if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
     ]
 
     if not fixable:

@@ -7,7 +7,7 @@ Handles expanding context and re-analyzing low-confidence matches.
 import glob
 import os
 import subprocess
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from .semantic import Concept, ConceptMatch
 

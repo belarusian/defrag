@@ -5,8 +5,11 @@ Abstracts LLM API calls for concept extraction and matching.
 """
 
 import json
+import logging
 import os
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -35,7 +38,9 @@ class LLMClient:
         try:
             import anthropic
 
+            logger.info(f"Initializing Anthropic client with model: {self.model}")
             self.client = anthropic.Anthropic(api_key=self.api_key)
+            logger.info("Anthropic client initialized successfully")
         except ImportError:
             raise ImportError(
                 "anthropic package not installed. Install with: pip install anthropic"
@@ -67,11 +72,17 @@ Respond with JSON only:
   "keywords": ["key", "terms", "list"]
 }}"""
 
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        try:
+            logger.debug(f"Extracting doc concept for section: {section_name}")
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            logger.debug("Doc concept extraction API call succeeded")
+        except Exception as e:
+            logger.error(f"Doc concept extraction API call failed: {type(e).__name__}: {e}")
+            raise
 
         try:
             # Strip markdown code blocks if present
@@ -122,11 +133,17 @@ Respond with JSON only:
   "keywords": ["key", "concepts", "list"]
 }}"""
 
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        try:
+            logger.debug(f"Extracting code concept for {file_path}:{location}")
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            logger.debug("Code concept extraction API call succeeded")
+        except Exception as e:
+            logger.error(f"Code concept extraction API call failed: {type(e).__name__}: {e}")
+            raise
 
         try:
             # Strip markdown code blocks if present
@@ -198,11 +215,17 @@ Rules:
   - reason: What you need to verify
 - Return empty array [] if no good matches"""
 
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        try:
+            logger.debug(f"Matching code concept to {len(doc_concepts)} doc concepts")
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            logger.debug("Concept matching API call succeeded")
+        except Exception as e:
+            logger.error(f"Concept matching failed: {type(e).__name__}: {e}")
+            raise
 
         try:
             # Strip markdown code blocks if present

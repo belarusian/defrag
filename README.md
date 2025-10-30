@@ -163,7 +163,7 @@ defrag gc --show                          # Show GC candidates
 # Requires ANTHROPIC_API_KEY environment variable
 
 defrag semantic-analyze [options]
-  --model MODEL           LLM model (default: claude-3-5-sonnet-20241022)
+  --model MODEL           LLM model (default: claude-sonnet-4-5-20250929)
   --limit-docs N          Limit docs for testing
   --limit-code N          Limit code files for testing
   --verbose               Show progress

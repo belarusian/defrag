@@ -4,7 +4,6 @@ Validator for code references in documentation.
 Checks if code references are valid and up-to-date.
 """
 
-import os
 import re
 from typing import List, Tuple
 

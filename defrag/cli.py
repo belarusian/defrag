@@ -93,7 +93,7 @@ def cmd_validate(args):
             if args.auto_mark:
                 update_doc_status(index, doc.path, status)
 
-        print(f"\nValidation complete:")
+        print("\nValidation complete:")
         print(f"  Good: {good_count}")
         print(f"  Bad: {bad_count}")
         print(f"  Unchecked: {len(index.documents) - good_count - bad_count}")
@@ -192,7 +192,7 @@ def cmd_report(args):
             if doc.notes:
                 print(f"    Notes: {doc.notes}")
             if doc.fixes:
-                print(f"    Fixes needed:")
+                print("    Fixes needed:")
                 for fix in doc.fixes:
                     print(f"      - {fix}")
     else:
@@ -200,7 +200,7 @@ def cmd_report(args):
         print("\n=== Documentation Index Report ===")
         print(f"Last updated: {index.last_updated}")
         print(f"Total documents: {len(index.documents)}")
-        print(f"\nStatus breakdown:")
+        print("\nStatus breakdown:")
         print(f"  Good: {len(index.good_docs())}")
         print(f"  Bad: {len(index.bad_docs())}")
         print(
@@ -246,10 +246,10 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # index command
-    parser_index = subparsers.add_parser("index", help="Initialize documentation index")
+    subparsers.add_parser("index", help="Initialize documentation index")
 
     # scan command
-    parser_scan = subparsers.add_parser("scan", help="Scan codebase for code references")
+    subparsers.add_parser("scan", help="Scan codebase for code references")
 
     # validate command
     parser_validate = subparsers.add_parser("validate", help="Validate documentation")

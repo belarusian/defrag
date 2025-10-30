@@ -5,7 +5,6 @@ Commands for LLM-based semantic analysis.
 """
 
 import os
-import sys
 
 from .analyzer import SemanticAnalyzer
 from .fixer import fix_document_references, fix_all_documents, preview_fix
@@ -117,7 +116,7 @@ def cmd_semantic_analyze(args):
     print("[4/5] Refining low-confidence matches (iterative context expansion)...")
     analyzer.refine_low_confidence_matches(max_iterations=3, verbose=args.verbose)
     progress.log("Refinement complete")
-    print(f"  Refinement complete\n")
+    print("  Refinement complete\n")
 
     # Step 5: Validate with physical links
     progress.section("Step 5: Physical Link Validation")
@@ -238,15 +237,15 @@ def cmd_semantic_validate(args):
             continue
 
         # High confidence but no valid physical link
-        if match.confidence >= 0.8 and match.physical_link_valid != True:
+        if match.confidence >= 0.8 and not match.physical_link_valid:
             high_confidence_no_link.append((match, code_concept, doc_concept))
 
         # Low confidence but has valid physical link
-        if match.confidence < 0.5 and match.physical_link_valid == True:
+        if match.confidence < 0.5 and match.physical_link_valid:
             low_confidence_has_link.append((match, code_concept, doc_concept))
 
         # Physical link invalid but high semantic confidence
-        if match.confidence >= 0.7 and match.physical_link_valid == False:
+        if match.confidence >= 0.7 and match.physical_link_valid is False:
             mismatches.append((match, code_concept, doc_concept))
 
     # Report
@@ -264,7 +263,7 @@ def cmd_semantic_validate(args):
         for match, code, doc in low_confidence_has_link[:5]:
             print(f"\n  {doc.source} <-> {code.source}")
             print(f"    Confidence: {match.confidence:.2f}")
-            print(f"    Physical link exists but semantic match weak")
+            print("    Physical link exists but semantic match weak")
 
     print(f"\nMismatches (good semantic, broken physical): {len(mismatches)}")
     if mismatches and args.verbose:

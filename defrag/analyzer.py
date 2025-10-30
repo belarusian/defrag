@@ -19,7 +19,6 @@ from .semantic import (
     extract_markdown_sections,
     make_concept_id,
 )
-from .validator import validate_code_ref
 
 
 class SemanticAnalyzer:
@@ -254,7 +253,6 @@ class SemanticAnalyzer:
                         # Check if any reference is valid
                         for ref_match in refs:
                             start_line = int(ref_match[0])
-                            end_line = int(ref_match[1]) if ref_match[1] else start_line
 
                             # Check if reference is in range of code concept
                             code_start, code_end = code_concept.line_range or (0, 0)

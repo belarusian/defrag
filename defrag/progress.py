@@ -7,7 +7,6 @@ Writes state to file so you can monitor progress during execution.
 import json
 import os
 from datetime import datetime
-from typing import Optional
 
 
 class ProgressTracker:

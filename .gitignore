@@ -48,6 +48,7 @@ htmlcov/
 docs_index.yaml
 semantic_index.json
 *.defrag.bak
+.defrag_state.json
 
 # Logs
 *.log

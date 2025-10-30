@@ -132,9 +132,7 @@ def fix_document_references(
 
     # Filter for high confidence matches without valid physical links
     fixable = [
-        m
-        for m in matches
-        if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
+        m for m in matches if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
     ]
 
     if not fixable:
@@ -251,9 +249,7 @@ def preview_fix(doc_path: str, semantic_index: SemanticIndex, root_dir: str = ".
     """
     matches = semantic_index.get_matches_for_doc(doc_path)
     fixable = [
-        m
-        for m in matches
-        if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
+        m for m in matches if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
     ]
 
     if not fixable:

@@ -4,6 +4,7 @@ Semantic CLI commands for defrag tool.
 Commands for LLM-based semantic analysis.
 """
 
+import os
 import sys
 
 from .analyzer import SemanticAnalyzer
@@ -14,6 +15,13 @@ from .semantic import SemanticIndex
 
 
 DEFAULT_SEMANTIC_INDEX = "semantic_index.json"
+
+
+def _resolve_index_path(index_arg, root_dir):
+    """Resolve semantic index path - look in root_dir if using default."""
+    if index_arg == DEFAULT_SEMANTIC_INDEX:
+        return os.path.join(root_dir, DEFAULT_SEMANTIC_INDEX)
+    return index_arg
 
 
 def cmd_semantic_analyze(args):
@@ -69,9 +77,10 @@ def cmd_semantic_analyze(args):
     print("[4/4] Validating with physical links (grounding heuristic)...")
     analyzer.validate_with_physical_links(verbose=args.verbose)
 
-    # Save index
-    analyzer.index.save(args.output)
-    print(f"\nSemantic index saved: {args.output}")
+    # Save index to target repo
+    output_path = _resolve_index_path(args.output, args.root)
+    analyzer.index.save(output_path)
+    print(f"\nSemantic index saved: {output_path}")
 
     # Generate report
     report = analyzer.generate_report()
@@ -87,10 +96,11 @@ def cmd_semantic_analyze(args):
 
 def cmd_semantic_report(args):
     """Show semantic analysis report."""
+    index_path = _resolve_index_path(args.semantic_index, args.root)
     try:
-        index = SemanticIndex.load(args.semantic_index)
+        index = SemanticIndex.load(index_path)
     except FileNotFoundError:
-        print(f"Error: Semantic index not found: {args.semantic_index}")
+        print(f"Error: Semantic index not found: {index_path}")
         print("Run 'semantic-analyze' first to build the index")
         return 1
 
@@ -146,10 +156,11 @@ def cmd_semantic_validate(args):
 
     Shows where semantic understanding differs from physical references.
     """
+    index_path = _resolve_index_path(args.semantic_index, args.root)
     try:
-        index = SemanticIndex.load(args.semantic_index)
+        index = SemanticIndex.load(index_path)
     except FileNotFoundError:
-        print(f"Error: Semantic index not found: {args.semantic_index}")
+        print(f"Error: Semantic index not found: {index_path}")
         return 1
 
     print("=== Semantic vs Physical Validation ===\n")
@@ -208,10 +219,11 @@ def cmd_semantic_validate(args):
 
 def cmd_semantic_fix(args):
     """Auto-fix missing physical links in documentation."""
+    index_path = _resolve_index_path(args.semantic_index, args.root)
     try:
-        index = SemanticIndex.load(args.semantic_index)
+        index = SemanticIndex.load(index_path)
     except FileNotFoundError:
-        print(f"Error: Semantic index not found: {args.semantic_index}")
+        print(f"Error: Semantic index not found: {index_path}")
         print("Run 'semantic-analyze' first to build the index")
         return 1
 

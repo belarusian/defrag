@@ -64,6 +64,8 @@ class ConceptMatch:
     reasoning: str  # Why they match
     physical_link_valid: Optional[bool] = None  # Grounding heuristic
     suggested_link: Optional[str] = None  # Recommended physical reference
+    context_needed: Optional[dict] = None  # What additional context LLM needs
+    iterations: int = 1  # Number of analysis iterations
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -74,6 +76,8 @@ class ConceptMatch:
             "reasoning": self.reasoning,
             "physical_link_valid": self.physical_link_valid,
             "suggested_link": self.suggested_link,
+            "context_needed": self.context_needed,
+            "iterations": self.iterations,
         }
 
     @classmethod
@@ -86,6 +90,8 @@ class ConceptMatch:
             reasoning=data["reasoning"],
             physical_link_valid=data.get("physical_link_valid"),
             suggested_link=data.get("suggested_link"),
+            context_needed=data.get("context_needed"),
+            iterations=data.get("iterations", 1),
         )
 
 

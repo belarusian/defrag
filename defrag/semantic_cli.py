@@ -69,12 +69,17 @@ def cmd_semantic_analyze(args):
     print(f"  Extracted {len(analyzer.index.get_code_concepts())} code concepts\n")
 
     # Step 3: Match concepts
-    print("[3/4] Matching code to documentation...")
+    print("[3/5] Matching code to documentation...")
     analyzer.match_all_concepts(verbose=args.verbose)
     print(f"  Found {len(analyzer.index.matches)} matches\n")
 
-    # Step 4: Validate with physical links
-    print("[4/4] Validating with physical links (grounding heuristic)...")
+    # Step 4: Refine low-confidence matches
+    print("[4/5] Refining low-confidence matches (iterative context expansion)...")
+    analyzer.refine_low_confidence_matches(max_iterations=3, verbose=args.verbose)
+    print(f"  Refinement complete\n")
+
+    # Step 5: Validate with physical links
+    print("[5/5] Validating with physical links (grounding heuristic)...")
     analyzer.validate_with_physical_links(verbose=args.verbose)
 
     # Save index to target repo

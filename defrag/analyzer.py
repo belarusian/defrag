@@ -11,6 +11,7 @@ import re
 from typing import Dict, List, Optional
 
 from .llm import LLMClient
+from .refiner import IterativeRefiner
 from .semantic import (
     Concept,
     ConceptMatch,
@@ -188,20 +189,24 @@ class SemanticAnalyzer:
 
                 doc_concept = doc_concepts[doc_index]
 
+                # Suggest physical link
+                suggested_link = None
+                if code_concept.line_range:
+                    start, end = code_concept.line_range
+                    if start == end:
+                        suggested_link = f"{code_concept.source}:{start}"
+                    else:
+                        suggested_link = f"{code_concept.source}:{start}-{end}"
+
                 concept_match = ConceptMatch(
                     code_concept_id=code_concept.id,
                     doc_concept_id=doc_concept.id,
                     confidence=match["confidence"],
                     reasoning=match["reasoning"],
+                    suggested_link=suggested_link,
+                    context_needed=match.get("context_needed"),
+                    iterations=1,
                 )
-
-                # Suggest physical link
-                if code_concept.line_range:
-                    start, end = code_concept.line_range
-                    if start == end:
-                        concept_match.suggested_link = f"{code_concept.source}:{start}"
-                    else:
-                        concept_match.suggested_link = f"{code_concept.source}:{start}-{end}"
 
                 self.index.add_match(concept_match)
 
@@ -269,6 +274,29 @@ class SemanticAnalyzer:
 
             except (IOError, UnicodeDecodeError):
                 pass
+
+    def refine_low_confidence_matches(
+        self, max_iterations: int = 3, verbose: bool = False
+    ) -> None:
+        """
+        Iteratively refine low-confidence matches by expanding context.
+
+        Args:
+            max_iterations: Maximum refinement iterations per match
+            verbose: Print progress
+        """
+        if verbose:
+            print("\nRefining low-confidence matches...")
+
+        refiner = IterativeRefiner(self.llm, self.root_dir, max_iterations)
+        refined_matches = refiner.refine_matches(self.index.matches, self.index, verbose)
+
+        # Replace matches with refined versions
+        self.index.matches = refined_matches
+
+        if verbose:
+            low_conf_count = sum(1 for m in self.index.matches if m.confidence < 0.7)
+            print(f"\nRefinement complete. {low_conf_count} matches still below 0.7 confidence")
 
     def generate_report(self) -> Dict:
         """

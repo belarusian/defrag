@@ -170,11 +170,22 @@ For each relevant match, respond with JSON array:
   {{
     "doc_index": 0,
     "confidence": 0.95,
-    "reasoning": "Why they match"
+    "reasoning": "Why they match",
+    "context_needed": {{
+      "file_patterns": ["**/pattern/*.py"],
+      "keywords": ["keyword1", "keyword2"],
+      "reason": "Need to see X to verify"
+    }}
   }}
 ]
 
-Only include matches with confidence >= 0.5. Return empty array [] if no good matches."""
+Rules:
+- Only include matches with confidence >= 0.5
+- If confidence < 0.7, include context_needed with:
+  - file_patterns: Glob patterns for files that would help
+  - keywords: Terms to search for
+  - reason: What you need to verify
+- Return empty array [] if no good matches"""
 
         response = self.client.messages.create(
             model=self.model,

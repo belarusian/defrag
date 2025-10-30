@@ -27,7 +27,7 @@ class LLMClient:
             api_key: Anthropic API key (or reads from ANTHROPIC_API_KEY env var)
             model: Model to use for analysis
         """
-        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        self.api_key = (api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
         self.model = model
 
         if not self.api_key:

@@ -56,7 +56,7 @@ class ProgressTracker:
             "step": step,
             "timestamp": datetime.now().isoformat(),
             "elapsed_seconds": (datetime.now() - self.start_time).total_seconds(),
-            **kwargs
+            **kwargs,
         }
 
         with open(self.state_path, "w") as f:

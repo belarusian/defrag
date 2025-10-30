@@ -46,9 +46,11 @@ class DocEntry:
         return cls(
             path=data["path"],
             status=DocStatus(data.get("status", "unchecked")),
-            last_validated=datetime.fromisoformat(data["last_validated"])
-            if data.get("last_validated")
-            else None,
+            last_validated=(
+                datetime.fromisoformat(data["last_validated"])
+                if data.get("last_validated")
+                else None
+            ),
             code_refs=data.get("code_refs", []),
             notes=data.get("notes", ""),
             fixes=data.get("fixes", []),
@@ -76,9 +78,11 @@ class DefragIndex:
         """Create DefragIndex from dictionary."""
         return cls(
             version=data.get("version", "1.0"),
-            last_updated=datetime.fromisoformat(data["last_updated"])
-            if data.get("last_updated")
-            else datetime.now(),
+            last_updated=(
+                datetime.fromisoformat(data["last_updated"])
+                if data.get("last_updated")
+                else datetime.now()
+            ),
             documents=[DocEntry.from_dict(doc) for doc in data.get("documents", [])],
         )
 
@@ -99,9 +103,7 @@ class DefragIndex:
     def gc_candidates(self) -> List[DocEntry]:
         """Get documents that are GC candidates (unchecked and no code refs)."""
         return [
-            doc
-            for doc in self.documents
-            if doc.status == DocStatus.UNCHECKED and not doc.code_refs
+            doc for doc in self.documents if doc.status == DocStatus.UNCHECKED and not doc.code_refs
         ]
 
     def bad_docs(self) -> List[DocEntry]:

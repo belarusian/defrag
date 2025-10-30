@@ -32,8 +32,7 @@ def fixture_codebase():
 
 @pytest.mark.integration
 @pytest.mark.skipif(
-    not os.getenv("ANTHROPIC_API_KEY"),
-    reason="Requires ANTHROPIC_API_KEY for real API calls"
+    not os.getenv("ANTHROPIC_API_KEY"), reason="Requires ANTHROPIC_API_KEY for real API calls"
 )
 class TestSemanticPipeline:
     """Integration tests using real LLM API."""
@@ -65,22 +64,26 @@ class TestSemanticPipeline:
 
         # Check for expected matches
         high_conf_matches = [m for m in analyzer.index.matches if m.confidence >= 0.7]
-        assert len(high_conf_matches) >= 2, \
-            "Should find at least 2 high-confidence matches (scoring + payment)"
+        assert (
+            len(high_conf_matches) >= 2
+        ), "Should find at least 2 high-confidence matches (scoring + payment)"
 
         # Verify matches are between USER_GUIDE and sample_code
         for match in high_conf_matches:
             doc_concept = analyzer.index.get_concept(match.doc_concept_id)
             code_concept = analyzer.index.get_concept(match.code_concept_id)
 
-            assert doc_concept.source == "docs/USER_GUIDE.md", \
-                f"Doc match should be from USER_GUIDE, got {doc_concept.source}"
-            assert code_concept.source == "sample_code.py", \
-                f"Code match should be from sample_code, got {code_concept.source}"
+            assert (
+                doc_concept.source == "docs/USER_GUIDE.md"
+            ), f"Doc match should be from USER_GUIDE, got {doc_concept.source}"
+            assert (
+                code_concept.source == "sample_code.py"
+            ), f"Code match should be from sample_code, got {code_concept.source}"
 
             # Should suggest physical links
-            assert match.suggested_link is not None, \
-                "High confidence match should suggest physical link"
+            assert (
+                match.suggested_link is not None
+            ), "High confidence match should suggest physical link"
             assert "sample_code.py:" in match.suggested_link
 
     def test_orphaned_doc_detection(self, fixture_codebase):
@@ -111,23 +114,21 @@ class TestSemanticPipeline:
 
         # LEGACY.md should have no matches (GC candidate)
         legacy_concepts = [
-            c for c in analyzer.index.get_doc_concepts()
-            if c.source == "docs/LEGACY.md"
+            c for c in analyzer.index.get_doc_concepts() if c.source == "docs/LEGACY.md"
         ]
 
         legacy_matches = [
-            m for m in analyzer.index.matches
-            if m.doc_concept_id in [c.id for c in legacy_concepts]
+            m for m in analyzer.index.matches if m.doc_concept_id in [c.id for c in legacy_concepts]
         ]
 
         # Legacy doc should either have no matches or only low-confidence ones
         high_conf_legacy = [m for m in legacy_matches if m.confidence >= 0.7]
-        assert len(high_conf_legacy) == 0, \
-            "LEGACY.md should not have high-confidence matches (orphaned doc)"
+        assert (
+            len(high_conf_legacy) == 0
+        ), "LEGACY.md should not have high-confidence matches (orphaned doc)"
 
         # Verify GC candidates are reported
-        assert report['unmatched_docs'] > 0, \
-            "Should identify orphaned docs as GC candidates"
+        assert report["unmatched_docs"] > 0, "Should identify orphaned docs as GC candidates"
 
     def test_undocumented_code_detection(self, fixture_codebase):
         """
@@ -159,12 +160,12 @@ class TestSemanticPipeline:
 
         # Verify CacheManager is in undocumented list
         cache_manager_concepts = [
-            c for c in undocumented
+            c
+            for c in undocumented
             if "CacheManager" in c.location or "cache" in c.description.lower()
         ]
 
-        assert len(cache_manager_concepts) > 0, \
-            "CacheManager should be detected as undocumented"
+        assert len(cache_manager_concepts) > 0, "CacheManager should be detected as undocumented"
 
     def test_iterative_refinement(self, fixture_codebase):
         """
@@ -190,33 +191,32 @@ class TestSemanticPipeline:
 
         # Capture initial state
         initial_matches = len(analyzer.index.matches)
-        initial_low_conf = sum(
-            1 for m in analyzer.index.matches if m.confidence < 0.7
-        )
+        initial_low_conf = sum(1 for m in analyzer.index.matches if m.confidence < 0.7)
 
         # Run refinement
         analyzer.refine_low_confidence_matches(max_iterations=2, verbose=False)
 
         # Check refinement effects
-        refined_low_conf = sum(
-            1 for m in analyzer.index.matches if m.confidence < 0.7
-        )
+        refined_low_conf = sum(1 for m in analyzer.index.matches if m.confidence < 0.7)
 
         # Refinement should not lose matches
-        assert len(analyzer.index.matches) == initial_matches, \
-            "Refinement should not remove matches"
+        assert (
+            len(analyzer.index.matches) == initial_matches
+        ), "Refinement should not remove matches"
 
         # Refinement should improve confidence or stay same
-        assert refined_low_conf <= initial_low_conf, \
-            "Refinement should improve or maintain confidence"
+        assert (
+            refined_low_conf <= initial_low_conf
+        ), "Refinement should improve or maintain confidence"
 
         # Check iteration tracking
         for match in analyzer.index.matches:
             assert match.iterations >= 1, "Match should track iterations"
             if match.confidence < 0.7:
                 # Low confidence matches should have attempted refinement
-                assert match.iterations > 1 or match.context_needed is None, \
-                    "Low confidence match should be refined or have no context needed"
+                assert (
+                    match.iterations > 1 or match.context_needed is None
+                ), "Low confidence match should be refined or have no context needed"
 
     def test_physical_link_validation(self, fixture_codebase):
         """
@@ -236,8 +236,7 @@ class TestSemanticPipeline:
 
         # Add reference to payment function
         modified = content.replace(
-            "Invalid amounts",
-            "See `sample_code.py:42-67` for implementation.\n\nInvalid amounts"
+            "Invalid amounts", "See `sample_code.py:42-67` for implementation.\n\nInvalid amounts"
         )
         user_guide.write_text(modified)
 
@@ -252,10 +251,6 @@ class TestSemanticPipeline:
         analyzer.validate_with_physical_links(verbose=False)
 
         # Check that physical link was detected
-        validated_matches = [
-            m for m in analyzer.index.matches
-            if m.physical_link_valid is True
-        ]
+        validated_matches = [m for m in analyzer.index.matches if m.physical_link_valid is True]
 
-        assert len(validated_matches) > 0, \
-            "Should detect existing physical link in documentation"
+        assert len(validated_matches) > 0, "Should detect existing physical link in documentation"

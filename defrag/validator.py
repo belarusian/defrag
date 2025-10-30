@@ -23,7 +23,7 @@ def parse_code_ref(code_ref: str) -> Tuple[str, int, int]:
         Tuple of (file_path, start_line, end_line)
         end_line is same as start_line if range not specified
     """
-    match = re.match(r'^(.+):(\d+)(?:-(\d+))?$', code_ref)
+    match = re.match(r"^(.+):(\d+)(?:-(\d+))?$", code_ref)
     if not match:
         raise ValueError(f"Invalid code reference format: {code_ref}")
 

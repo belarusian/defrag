@@ -34,6 +34,7 @@ class LLMClient:
 
         try:
             import anthropic
+
             self.client = anthropic.Anthropic(api_key=self.api_key)
         except ImportError:
             raise ImportError(
@@ -152,9 +153,7 @@ Respond with JSON only:
             - reasoning: Why they match
         """
         # Build prompt with code concept and doc options
-        doc_summaries = "\n".join(
-            [f"{i}. {d['description']}" for i, d in enumerate(doc_concepts)]
-        )
+        doc_summaries = "\n".join([f"{i}. {d['description']}" for i, d in enumerate(doc_concepts)])
 
         prompt = f"""Match this code concept to relevant documentation sections.
 

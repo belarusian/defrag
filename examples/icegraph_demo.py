@@ -93,13 +93,13 @@ def run_demo(icegraph_path: str, limit_docs: int = 5, limit_code: int = 10):
     # Analyze code
     print("[3/4] Analyzing code...")
     import glob
+
     code_paths = []
     for pattern in ["ingest/**/*.py", "tools/defrag/**/*.py"]:
         full_pattern = os.path.join(icegraph_path, pattern)
-        code_paths.extend([
-            os.path.relpath(p, icegraph_path)
-            for p in glob.glob(full_pattern, recursive=True)
-        ])
+        code_paths.extend(
+            [os.path.relpath(p, icegraph_path) for p in glob.glob(full_pattern, recursive=True)]
+        )
 
     if limit_code:
         code_paths = code_paths[:limit_code]
@@ -131,11 +131,11 @@ def run_demo(icegraph_path: str, limit_docs: int = 5, limit_code: int = 10):
     print(f"  Validated by physical links: {report['validated_matches']}")
     print()
 
-    if report['unmatched_docs'] > 0:
+    if report["unmatched_docs"] > 0:
         print(f"GC Candidates: {report['unmatched_docs']} docs with no semantic matches")
-        if report['gc_candidates']:
+        if report["gc_candidates"]:
             print("\nExamples:")
-            for doc in report['gc_candidates'][:5]:
+            for doc in report["gc_candidates"][:5]:
                 print(f"  - {doc}")
 
     print()
@@ -176,25 +176,17 @@ def run_demo(icegraph_path: str, limit_docs: int = 5, limit_code: int = 10):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Demo: Analyze IceGraph documentation with defrag"
-    )
+    parser = argparse.ArgumentParser(description="Demo: Analyze IceGraph documentation with defrag")
     parser.add_argument(
         "--icegraph-path",
         default=os.path.expanduser("~/Code/TriSparkLakeHouse"),
-        help="Path to IceGraph repository"
+        help="Path to IceGraph repository",
     )
     parser.add_argument(
-        "--limit-docs",
-        type=int,
-        default=5,
-        help="Limit number of docs (for demo speed)"
+        "--limit-docs", type=int, default=5, help="Limit number of docs (for demo speed)"
     )
     parser.add_argument(
-        "--limit-code",
-        type=int,
-        default=10,
-        help="Limit number of code files (for demo speed)"
+        "--limit-code", type=int, default=10, help="Limit number of code files (for demo speed)"
     )
 
     args = parser.parse_args()

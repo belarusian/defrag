@@ -22,7 +22,7 @@ class TestConcept:
             description="Test section describing feature X",
             keywords=["test", "feature", "x"],
             line_range=(1, 10),
-            raw_content="# Section 1\nContent here"
+            raw_content="# Section 1\nContent here",
         )
 
         assert concept.id == "doc:test.md:section1"
@@ -38,7 +38,7 @@ class TestConcept:
             location="function_foo",
             description="Processes user data",
             keywords=["user", "process"],
-            line_range=(15, 30)
+            line_range=(15, 30),
         )
 
         # Serialize
@@ -65,7 +65,7 @@ class TestConceptMatch:
             reasoning="Both describe user data processing",
             suggested_link="main.py:15-30",
             context_needed=None,
-            iterations=1
+            iterations=1,
         )
 
         assert match.confidence == 0.85
@@ -82,9 +82,9 @@ class TestConceptMatch:
             context_needed={
                 "file_patterns": ["**/utils/*.py"],
                 "keywords": ["helper", "utility"],
-                "reason": "Need to see helper functions"
+                "reason": "Need to see helper functions",
             },
-            iterations=1
+            iterations=1,
         )
 
         assert match.confidence < 0.7
@@ -101,7 +101,7 @@ class TestConceptMatch:
             physical_link_valid=True,
             suggested_link="a.py:10",
             context_needed={"test": "data"},
-            iterations=2
+            iterations=2,
         )
 
         data = match.to_dict()
@@ -135,7 +135,7 @@ class TestSemanticIndex:
             source_type="doc",
             location="s1",
             description="Test",
-            keywords=[]
+            keywords=[],
         )
 
         concept2 = Concept(
@@ -144,7 +144,7 @@ class TestSemanticIndex:
             source_type="code",
             location="func",
             description="Function",
-            keywords=[]
+            keywords=[],
         )
 
         index.add_concept(concept1)
@@ -159,10 +159,7 @@ class TestSemanticIndex:
         index = SemanticIndex()
 
         match = ConceptMatch(
-            code_concept_id="code:a",
-            doc_concept_id="doc:b",
-            confidence=0.8,
-            reasoning="Test"
+            code_concept_id="code:a", doc_concept_id="doc:b", confidence=0.8, reasoning="Test"
         )
 
         index.add_match(match)
@@ -178,7 +175,7 @@ class TestSemanticIndex:
             source_type="doc",
             location="s1",
             description="Doc",
-            keywords=[]
+            keywords=[],
         )
 
         code_concept = Concept(
@@ -187,7 +184,7 @@ class TestSemanticIndex:
             source_type="code",
             location="func",
             description="Code",
-            keywords=[]
+            keywords=[],
         )
 
         index.add_concept(doc_concept)
@@ -207,7 +204,7 @@ class TestSemanticIndex:
             source_type="doc",
             location="s1",
             description="Doc",
-            keywords=[]
+            keywords=[],
         )
 
         code_concept = Concept(
@@ -216,7 +213,7 @@ class TestSemanticIndex:
             source_type="code",
             location="func",
             description="Code",
-            keywords=[]
+            keywords=[],
         )
 
         index.add_concept(doc_concept)

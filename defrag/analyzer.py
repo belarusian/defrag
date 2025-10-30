@@ -334,3 +334,33 @@ class SemanticAnalyzer:
             "unmatched_docs": len(unmatched_docs),
             "gc_candidates": sorted(unmatched_docs),
         }
+
+    def find_undocumented_code(self, min_confidence: float = 0.5) -> List[Concept]:
+        """
+        Find code concepts that have no documentation.
+
+        Identifies code that lacks semantic matches to documentation,
+        which could benefit from auto-generated docs.
+
+        Args:
+            min_confidence: Minimum confidence to consider a match valid
+
+        Returns:
+            List of code Concept objects with no doc matches
+        """
+        code_concepts = self.index.get_code_concepts()
+
+        # Get code concept IDs that have matches
+        matched_code_ids = {
+            m.code_concept_id
+            for m in self.index.matches
+            if m.confidence >= min_confidence
+        }
+
+        # Return code concepts with no matches
+        undocumented = [
+            c for c in code_concepts
+            if c.id not in matched_code_ids
+        ]
+
+        return undocumented

@@ -74,12 +74,18 @@ Respond with JSON only:
         )
 
         try:
-            result = json.loads(response.content[0].text)
+            # Strip markdown code blocks if present
+            text = response.content[0].text.strip()
+            if text.startswith("```"):
+                # Remove ```json or ``` prefix and ``` suffix
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+                text = text.rsplit("```", 1)[0].strip()
+            result = json.loads(text)
             return {
                 "description": result.get("description", ""),
                 "keywords": result.get("keywords", []),
             }
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, IndexError):
             # Fallback
             return {
                 "description": f"Documentation section: {section_name}",
@@ -123,12 +129,18 @@ Respond with JSON only:
         )
 
         try:
-            result = json.loads(response.content[0].text)
+            # Strip markdown code blocks if present
+            text = response.content[0].text.strip()
+            if text.startswith("```"):
+                # Remove ```json or ``` prefix and ``` suffix
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+                text = text.rsplit("```", 1)[0].strip()
+            result = json.loads(text)
             return {
                 "description": result.get("description", ""),
                 "keywords": result.get("keywords", []),
             }
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, IndexError):
             return {
                 "description": f"Code at {location}",
                 "keywords": [location.lower()],
@@ -193,9 +205,14 @@ Rules:
         )
 
         try:
-            matches = json.loads(response.content[0].text)
+            # Strip markdown code blocks if present
+            text = response.content[0].text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+                text = text.rsplit("```", 1)[0].strip()
+            matches = json.loads(text)
             return matches if isinstance(matches, list) else []
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, IndexError):
             return []
 
     def batch_extract_doc_concepts(self, sections: List[tuple]) -> List[Dict[str, any]]:

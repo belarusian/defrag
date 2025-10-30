@@ -145,7 +145,9 @@ class IterativeRefiner:
                     f"  Refining match (iteration {iteration + 1}): "
                     f"confidence={current_match.confidence:.2f}"
                 )
-                print(f"    Context needed: {current_match.context_needed.get('reason', 'Unknown')}")
+                print(
+                    f"    Context needed: {current_match.context_needed.get('reason', 'Unknown')}"
+                )
 
             # Expand context
             expanded = self.expander.expand_context(current_match.context_needed)
@@ -172,9 +174,7 @@ class IterativeRefiner:
             }
 
             # Re-analyze with broader context
-            matches = self.llm.match_concepts(
-                enriched_code_concept, [enriched_doc_concept]
-            )
+            matches = self.llm.match_concepts(enriched_code_concept, [enriched_doc_concept])
 
             if not matches:
                 break
@@ -223,12 +223,8 @@ class IterativeRefiner:
 
                 if code_concept and doc_concept:
                     if verbose:
-                        print(
-                            f"\nRefining: {doc_concept.source} -> {code_concept.source}"
-                        )
-                    refined_match = self.refine_match(
-                        match, code_concept, doc_concept, verbose
-                    )
+                        print(f"\nRefining: {doc_concept.source} -> {code_concept.source}")
+                    refined_match = self.refine_match(match, code_concept, doc_concept, verbose)
                     refined.append(refined_match)
                 else:
                     refined.append(match)

@@ -158,6 +158,7 @@ def cmd_gc(args):
             for doc in candidates:
                 try:
                     import os
+
                     os.remove(doc.path)
                     print(f"  Removed: {doc.path}")
                     index.documents.remove(doc)
@@ -202,7 +203,9 @@ def cmd_report(args):
         print(f"\nStatus breakdown:")
         print(f"  Good: {len(index.good_docs())}")
         print(f"  Bad: {len(index.bad_docs())}")
-        print(f"  Unchecked: {len([d for d in index.documents if d.status == DocStatus.UNCHECKED])}")
+        print(
+            f"  Unchecked: {len([d for d in index.documents if d.status == DocStatus.UNCHECKED])}"
+        )
         print(f"\nGC candidates: {len(index.gc_candidates())}")
 
     return 0
@@ -251,7 +254,9 @@ def main():
     # validate command
     parser_validate = subparsers.add_parser("validate", help="Validate documentation")
     parser_validate.add_argument("--doc", help="Specific document to validate")
-    parser_validate.add_argument("--auto-mark", action="store_true", help="Automatically update status")
+    parser_validate.add_argument(
+        "--auto-mark", action="store_true", help="Automatically update status"
+    )
 
     # mark command
     parser_mark = subparsers.add_parser("mark", help="Mark documentation status")
@@ -263,7 +268,9 @@ def main():
     # gc command
     parser_gc = subparsers.add_parser("gc", help="Garbage collection")
     parser_gc.add_argument("--apply", action="store_true", help="Apply GC (remove files)")
-    parser_gc.add_argument("--dry-run", action="store_true", help="Dry run (show what would be removed)")
+    parser_gc.add_argument(
+        "--dry-run", action="store_true", help="Dry run (show what would be removed)"
+    )
 
     # report command
     parser_report = subparsers.add_parser("report", help="Generate status report")

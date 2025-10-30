@@ -80,7 +80,9 @@ def cmd_semantic_analyze(args):
     code_paths = []
     for pattern in ["ingest/**/*.py", "tools/**/*.py"]:
         full_pattern = os.path.join(args.root, pattern)
-        code_paths.extend([os.path.relpath(p, args.root) for p in glob.glob(full_pattern, recursive=True)])
+        code_paths.extend(
+            [os.path.relpath(p, args.root) for p in glob.glob(full_pattern, recursive=True)]
+        )
 
     progress.log(f"Found {len(code_paths)} code files")
     if args.limit_code:
@@ -97,7 +99,9 @@ def cmd_semantic_analyze(args):
 
     # Step 3: Match concepts
     progress.section("Step 3: Concept Matching")
-    progress.log(f"Matching {code_concept_count} code concepts to {doc_concept_count} doc concepts...")
+    progress.log(
+        f"Matching {code_concept_count} code concepts to {doc_concept_count} doc concepts..."
+    )
     progress.update_state("matching_concepts")
     print("[3/5] Matching code to documentation...")
     analyzer.match_all_concepts(verbose=args.verbose)
@@ -132,13 +136,17 @@ def cmd_semantic_analyze(args):
 
     # Generate report
     report = analyzer.generate_report()
-    progress.log(f"Analysis complete: {report['total_matches']} matches, {report['high_confidence_matches']} high confidence")
+    progress.log(
+        f"Analysis complete: {report['total_matches']} matches, {report['high_confidence_matches']} high confidence"
+    )
     progress.complete()
 
     print("\n=== Analysis Complete ===")
     print(f"Documentation: {report['total_docs']} files, {report['doc_concepts']} concepts")
     print(f"Code: {report['total_code_files']} files, {report['code_concepts']} concepts")
-    print(f"Matches: {report['total_matches']} total, {report['high_confidence_matches']} high confidence")
+    print(
+        f"Matches: {report['total_matches']} total, {report['high_confidence_matches']} high confidence"
+    )
     print(f"Validated: {report['validated_matches']} matches have valid physical links")
     print(f"GC candidates: {report['unmatched_docs']} docs with no semantic matches")
     print(f"\nProgress log: {progress.log_path}")
@@ -172,9 +180,9 @@ def cmd_semantic_report(args):
     print()
     print(f"GC candidates: {report['unmatched_docs']} docs with no matches")
 
-    if args.show_gc and report['gc_candidates']:
+    if args.show_gc and report["gc_candidates"]:
         print("\nGarbage Collection Candidates:")
-        for doc in report['gc_candidates']:
+        for doc in report["gc_candidates"]:
             print(f"  - {doc}")
 
     if args.doc:
@@ -296,11 +304,7 @@ def cmd_semantic_fix(args):
             print("[DRY RUN] Use --apply to write changes\n")
 
         changes = fix_document_references(
-            args.doc,
-            index,
-            args.root,
-            dry_run=not args.apply,
-            verbose=True
+            args.doc, index, args.root, dry_run=not args.apply, verbose=True
         )
 
         if changes:
@@ -319,11 +323,13 @@ def cmd_semantic_fix(args):
             args.root,
             dry_run=not args.apply,
             min_confidence=args.min_confidence,
-            verbose=True
+            verbose=True,
         )
 
         total_changes = sum(len(changes) for changes in all_changes.values())
-        print(f"\n{'Applied' if args.apply else 'Would apply'} {total_changes} fixes across {len(all_changes)} documents")
+        print(
+            f"\n{'Applied' if args.apply else 'Would apply'} {total_changes} fixes across {len(all_changes)} documents"
+        )
 
     return 0
 
@@ -342,10 +348,16 @@ def add_semantic_commands(subparsers, parent_parser):
         help="Run LLM-based semantic analysis",
         parents=[parent_parser],
     )
-    parser_analyze.add_argument("--model", default="claude-sonnet-4-5-20250929", help="LLM model to use")
-    parser_analyze.add_argument("--output", default=DEFAULT_SEMANTIC_INDEX, help="Output file for semantic index")
+    parser_analyze.add_argument(
+        "--model", default="claude-sonnet-4-5-20250929", help="LLM model to use"
+    )
+    parser_analyze.add_argument(
+        "--output", default=DEFAULT_SEMANTIC_INDEX, help="Output file for semantic index"
+    )
     parser_analyze.add_argument("--limit-docs", type=int, help="Limit number of docs (for testing)")
-    parser_analyze.add_argument("--limit-code", type=int, help="Limit number of code files (for testing)")
+    parser_analyze.add_argument(
+        "--limit-code", type=int, help="Limit number of code files (for testing)"
+    )
     parser_analyze.add_argument("--verbose", action="store_true", help="Verbose output")
 
     # semantic-report command
@@ -354,7 +366,9 @@ def add_semantic_commands(subparsers, parent_parser):
         help="Show semantic analysis report",
         parents=[parent_parser],
     )
-    parser_report.add_argument("--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file")
+    parser_report.add_argument(
+        "--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file"
+    )
     parser_report.add_argument("--doc", help="Show matches for specific doc")
     parser_report.add_argument("--show-gc", action="store_true", help="Show GC candidates")
 
@@ -364,8 +378,12 @@ def add_semantic_commands(subparsers, parent_parser):
         help="Validate semantic matches with physical links",
         parents=[parent_parser],
     )
-    parser_validate.add_argument("--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file")
-    parser_validate.add_argument("--verbose", action="store_true", help="Show detailed discrepancies")
+    parser_validate.add_argument(
+        "--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file"
+    )
+    parser_validate.add_argument(
+        "--verbose", action="store_true", help="Show detailed discrepancies"
+    )
 
     # semantic-fix command
     parser_fix = subparsers.add_parser(
@@ -373,11 +391,15 @@ def add_semantic_commands(subparsers, parent_parser):
         help="Auto-fix missing physical links in documentation",
         parents=[parent_parser],
     )
-    parser_fix.add_argument("--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file")
+    parser_fix.add_argument(
+        "--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file"
+    )
     parser_fix.add_argument("--doc", help="Fix specific document (default: all)")
     parser_fix.add_argument("--apply", action="store_true", help="Apply changes (default: dry run)")
     parser_fix.add_argument("--preview", action="store_true", help="Preview fixes without applying")
-    parser_fix.add_argument("--min-confidence", type=float, default=0.7, help="Minimum confidence to fix (default: 0.7)")
+    parser_fix.add_argument(
+        "--min-confidence", type=float, default=0.7, help="Minimum confidence to fix (default: 0.7)"
+    )
 
     return {
         "semantic-analyze": cmd_semantic_analyze,

@@ -162,7 +162,9 @@ class SemanticAnalyzer:
         doc_concepts = self.index.get_doc_concepts()
 
         if verbose:
-            print(f"\nMatching {len(code_concepts)} code concepts to {len(doc_concepts)} doc concepts...")
+            print(
+                f"\nMatching {len(code_concepts)} code concepts to {len(doc_concepts)} doc concepts..."
+            )
 
         # Prepare doc concepts for matching
         doc_concept_list = [
@@ -245,9 +247,7 @@ class SemanticAnalyzer:
                 # Check if doc references this code file
                 if code_concept.source in doc_content:
                     # Extract specific line references
-                    pattern = re.compile(
-                        rf"{re.escape(code_concept.source)}:(\d+)(?:-(\d+))?"
-                    )
+                    pattern = re.compile(rf"{re.escape(code_concept.source)}:(\d+)(?:-(\d+))?")
                     refs = pattern.findall(doc_content)
 
                     if refs:
@@ -275,9 +275,7 @@ class SemanticAnalyzer:
             except (IOError, UnicodeDecodeError):
                 pass
 
-    def refine_low_confidence_matches(
-        self, max_iterations: int = 3, verbose: bool = False
-    ) -> None:
+    def refine_low_confidence_matches(self, max_iterations: int = 3, verbose: bool = False) -> None:
         """
         Iteratively refine low-confidence matches by expanding context.
 
@@ -352,15 +350,10 @@ class SemanticAnalyzer:
 
         # Get code concept IDs that have matches
         matched_code_ids = {
-            m.code_concept_id
-            for m in self.index.matches
-            if m.confidence >= min_confidence
+            m.code_concept_id for m in self.index.matches if m.confidence >= min_confidence
         }
 
         # Return code concepts with no matches
-        undocumented = [
-            c for c in code_concepts
-            if c.id not in matched_code_ids
-        ]
+        undocumented = [c for c in code_concepts if c.id not in matched_code_ids]
 
         return undocumented

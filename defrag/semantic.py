@@ -132,7 +132,9 @@ class SemanticIndex:
     def get_matches_for_code(self, code_path: str) -> List[ConceptMatch]:
         """Get all matches for a code file."""
         code_concept_ids = {
-            c.id for c in self.concepts.values() if c.source == code_path and c.source_type == "code"
+            c.id
+            for c in self.concepts.values()
+            if c.source == code_path and c.source_type == "code"
         }
         return [m for m in self.matches if m.code_concept_id in code_concept_ids]
 
@@ -215,7 +217,9 @@ def extract_markdown_sections(md_path: str, root_dir: str = ".") -> List[tuple]:
 
         # Save last section
         if current_section:
-            sections.append((current_section, "".join(current_content).strip(), line_start, len(lines)))
+            sections.append(
+                (current_section, "".join(current_content).strip(), line_start, len(lines))
+            )
 
     except (IOError, UnicodeDecodeError):
         pass

@@ -10,6 +10,7 @@ import sys
 from .analyzer import SemanticAnalyzer
 from .fixer import fix_document_references, fix_all_documents, preview_fix
 from .llm import LLMClient
+from .progress import ProgressTracker
 from .scanner import scan_documentation
 from .semantic import SemanticIndex
 
@@ -31,27 +32,47 @@ def cmd_semantic_analyze(args):
     print(f"Model: {args.model}")
     print()
 
+    # Initialize progress tracker
+    progress = ProgressTracker(args.root)
+    progress.log(f"Starting semantic analysis on {args.root}")
+    progress.log(f"Using model: {args.model}")
+    print(f"Progress log: {progress.log_path}")
+    print()
+
     # Initialize
     try:
+        progress.log("Initializing LLM client...")
         llm = LLMClient(model=args.model)
         analyzer = SemanticAnalyzer(llm, root_dir=args.root)
+        progress.log("LLM client ready")
     except Exception as e:
+        progress.log(f"ERROR: {e}")
         print(f"Error initializing LLM client: {e}")
         print("\nHint: Set ANTHROPIC_API_KEY environment variable")
         return 1
 
     # Step 1: Analyze documentation
-    print("[1/4] Analyzing documentation...")
+    progress.section("Step 1: Documentation Analysis")
+    progress.log("Scanning for documentation files...")
+    print("[1/5] Analyzing documentation...")
     doc_paths = scan_documentation(args.root)
+    progress.log(f"Found {len(doc_paths)} documentation files")
     if args.limit_docs:
         doc_paths = doc_paths[: args.limit_docs]
+        progress.log(f"Limiting to {args.limit_docs} docs for testing")
         print(f"  (limiting to {args.limit_docs} docs for testing)")
 
+    progress.log("Extracting concepts from documentation (LLM calls)...")
+    progress.update_state("analyzing_docs", total_docs=len(doc_paths))
     analyzer.analyze_documentation(doc_paths, verbose=args.verbose)
-    print(f"  Extracted {len(analyzer.index.get_doc_concepts())} doc concepts\n")
+    doc_concept_count = len(analyzer.index.get_doc_concepts())
+    progress.log(f"Extracted {doc_concept_count} doc concepts")
+    print(f"  Extracted {doc_concept_count} doc concepts\n")
 
     # Step 2: Analyze code
-    print("[2/4] Analyzing code...")
+    progress.section("Step 2: Code Analysis")
+    progress.log("Scanning for code files...")
+    print("[2/5] Analyzing code...")
     # For now, scan Python files in specific directories
     import os
     import glob
@@ -61,40 +82,66 @@ def cmd_semantic_analyze(args):
         full_pattern = os.path.join(args.root, pattern)
         code_paths.extend([os.path.relpath(p, args.root) for p in glob.glob(full_pattern, recursive=True)])
 
+    progress.log(f"Found {len(code_paths)} code files")
     if args.limit_code:
         code_paths = code_paths[: args.limit_code]
+        progress.log(f"Limiting to {args.limit_code} files for testing")
         print(f"  (limiting to {args.limit_code} files for testing)")
 
+    progress.log("Extracting concepts from code (LLM calls)...")
+    progress.update_state("analyzing_code", total_code_files=len(code_paths))
     analyzer.analyze_code_files(code_paths, verbose=args.verbose)
-    print(f"  Extracted {len(analyzer.index.get_code_concepts())} code concepts\n")
+    code_concept_count = len(analyzer.index.get_code_concepts())
+    progress.log(f"Extracted {code_concept_count} code concepts")
+    print(f"  Extracted {code_concept_count} code concepts\n")
 
     # Step 3: Match concepts
+    progress.section("Step 3: Concept Matching")
+    progress.log(f"Matching {code_concept_count} code concepts to {doc_concept_count} doc concepts...")
+    progress.update_state("matching_concepts")
     print("[3/5] Matching code to documentation...")
     analyzer.match_all_concepts(verbose=args.verbose)
-    print(f"  Found {len(analyzer.index.matches)} matches\n")
+    match_count = len(analyzer.index.matches)
+    progress.log(f"Found {match_count} initial matches")
+    print(f"  Found {match_count} matches\n")
 
     # Step 4: Refine low-confidence matches
+    progress.section("Step 4: Iterative Refinement")
+    low_conf_count = sum(1 for m in analyzer.index.matches if m.confidence < 0.7)
+    progress.log(f"Refining {low_conf_count} low-confidence matches (context expansion)...")
+    progress.update_state("refining_matches", low_confidence_count=low_conf_count)
     print("[4/5] Refining low-confidence matches (iterative context expansion)...")
     analyzer.refine_low_confidence_matches(max_iterations=3, verbose=args.verbose)
+    progress.log("Refinement complete")
     print(f"  Refinement complete\n")
 
     # Step 5: Validate with physical links
+    progress.section("Step 5: Physical Link Validation")
+    progress.log("Validating matches with physical link checker...")
+    progress.update_state("validating_links")
     print("[5/5] Validating with physical links (grounding heuristic)...")
     analyzer.validate_with_physical_links(verbose=args.verbose)
+    progress.log("Physical validation complete")
 
     # Save index to target repo
+    progress.log("Saving semantic index...")
     output_path = _resolve_index_path(args.output, args.root)
     analyzer.index.save(output_path)
+    progress.log(f"Index saved to {output_path}")
     print(f"\nSemantic index saved: {output_path}")
 
     # Generate report
     report = analyzer.generate_report()
+    progress.log(f"Analysis complete: {report['total_matches']} matches, {report['high_confidence_matches']} high confidence")
+    progress.complete()
+
     print("\n=== Analysis Complete ===")
     print(f"Documentation: {report['total_docs']} files, {report['doc_concepts']} concepts")
     print(f"Code: {report['total_code_files']} files, {report['code_concepts']} concepts")
     print(f"Matches: {report['total_matches']} total, {report['high_confidence_matches']} high confidence")
     print(f"Validated: {report['validated_matches']} matches have valid physical links")
     print(f"GC candidates: {report['unmatched_docs']} docs with no semantic matches")
+    print(f"\nProgress log: {progress.log_path}")
 
     return 0
 

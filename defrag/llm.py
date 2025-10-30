@@ -16,7 +16,7 @@ class LLMClient:
     Uses Anthropic Claude API (or can be adapted for other providers).
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-5-20250929"):
         """
         Initialize LLM client.
 

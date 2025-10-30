@@ -278,7 +278,7 @@ def add_semantic_commands(subparsers, parent_parser):
         help="Run LLM-based semantic analysis",
         parents=[parent_parser],
     )
-    parser_analyze.add_argument("--model", default="claude-3-5-sonnet-20241022", help="LLM model to use")
+    parser_analyze.add_argument("--model", default="claude-sonnet-4-5-20250929", help="LLM model to use")
     parser_analyze.add_argument("--output", default=DEFAULT_SEMANTIC_INDEX, help="Output file for semantic index")
     parser_analyze.add_argument("--limit-docs", type=int, help="Limit number of docs (for testing)")
     parser_analyze.add_argument("--limit-code", type=int, help="Limit number of code files (for testing)")

@@ -35,6 +35,14 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=requirements,
+    extras_require={
+        "dev": [
+            "pytest>=7.0",
+            "pytest-cov>=4.0",
+            "black>=23.0",
+            "ruff>=0.1.0",
+        ],
+    },
     entry_points={
         "console_scripts": [
             "defrag=defrag.cli:main",

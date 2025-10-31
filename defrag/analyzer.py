@@ -294,7 +294,7 @@ class SemanticAnalyzer:
             low_conf_count = sum(1 for m in self.index.matches if m.confidence < 0.7)
             print(f"\nRefinement complete. {low_conf_count} matches still below 0.7 confidence")
 
-    def generate_report(self, min_confidence: float = 0.5) -> Dict:
+    def generate_report(self, min_confidence: float = 0.7) -> Dict:
         """
         Generate semantic analysis report.
 

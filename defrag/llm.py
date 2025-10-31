@@ -92,8 +92,9 @@ class LLMClient:
         """Send prompt to provider and return raw text response."""
         return self._provider.send_prompt(prompt, max_tokens)
 
-    def _request_json(self, prompt: str, max_tokens: int, log_context: str,
-                      validator, schema_retry_builder):
+    def _request_json(
+        self, prompt: str, max_tokens: int, log_context: str, validator, schema_retry_builder
+    ):
         """Send prompt, validate structured JSON, and retry once if needed."""
         logger.debug(log_context)
         raw = self._send_prompt(prompt, max_tokens=max_tokens)
@@ -122,7 +123,10 @@ class LLMClient:
             if issues:
                 raise ValueError(
                     "%s - invalid response after retry: %s"
-                    % (log_context, "; ".join(f"entry {issue['index']}: {issue['error']}" for issue in issues))
+                    % (
+                        log_context,
+                        "; ".join(f"entry {issue['index']}: {issue['error']}" for issue in issues),
+                    )
                 )
 
         return normalized
@@ -176,7 +180,9 @@ Please respond with valid JSON only, with no additional text or markdown."""
             logger.warning("Failed to parse JSON response: %s", exc)
             return fallback
 
-    def _validate_doc_response(self, data: any, section_name: str) -> Tuple[Dict[str, any], List[Dict[str, str]]]:
+    def _validate_doc_response(
+        self, data: any, section_name: str
+    ) -> Tuple[Dict[str, any], List[Dict[str, str]]]:
         issues: List[Dict[str, str]] = []
         if not isinstance(data, dict):
             return {}, [{"index": 0, "error": "response is not an object"}]
@@ -207,9 +213,13 @@ Please respond with valid JSON only, with no additional text or markdown."""
         return normalized, issues
 
     @staticmethod
-    def _build_doc_retry_prompt(section_name: str, issues: List[Dict[str, str]], original_raw: str) -> str:
+    def _build_doc_retry_prompt(
+        section_name: str, issues: List[Dict[str, str]], original_raw: str
+    ) -> str:
         """Prompt the model to fix doc concept schema violations."""
-        issues_text = "\n".join(f"- {issue['error']}" for issue in issues) or "- (no details captured)"
+        issues_text = (
+            "\n".join(f"- {issue['error']}" for issue in issues) or "- (no details captured)"
+        )
         return (
             "Your previous JSON response for the documentation section "
             f"'{section_name}' is invalid.\n"
@@ -225,7 +235,9 @@ Please respond with valid JSON only, with no additional text or markdown."""
             "Respond with JSON only."
         )
 
-    def _validate_code_response(self, data: any, location: str) -> Tuple[Dict[str, any], List[Dict[str, str]]]:
+    def _validate_code_response(
+        self, data: any, location: str
+    ) -> Tuple[Dict[str, any], List[Dict[str, str]]]:
         issues: List[Dict[str, str]] = []
         if not isinstance(data, dict):
             return {}, [{"index": 0, "error": "response is not an object"}]
@@ -256,9 +268,13 @@ Please respond with valid JSON only, with no additional text or markdown."""
         return normalized, issues
 
     @staticmethod
-    def _build_code_retry_prompt(location: str, issues: List[Dict[str, str]], original_raw: str) -> str:
+    def _build_code_retry_prompt(
+        location: str, issues: List[Dict[str, str]], original_raw: str
+    ) -> str:
         """Prompt the model to fix code concept schema violations."""
-        issues_text = "\n".join(f"- {issue['error']}" for issue in issues) or "- (no details captured)"
+        issues_text = (
+            "\n".join(f"- {issue['error']}" for issue in issues) or "- (no details captured)"
+        )
         return (
             "Your previous JSON response for the code element "
             f"'{location}' is invalid.\n"
@@ -274,7 +290,9 @@ Please respond with valid JSON only, with no additional text or markdown."""
             "Respond with JSON only."
         )
 
-    def _validate_match_response(self, entries: any, doc_count: int, iteration: int) -> Tuple[List[Dict[str, any]], List[Dict[str, any]]]:
+    def _validate_match_response(
+        self, entries: any, doc_count: int, iteration: int
+    ) -> Tuple[List[Dict[str, any]], List[Dict[str, any]]]:
         if not isinstance(entries, list):
             return [], [{"index": 0, "error": "response is not a list"}]
 
@@ -325,8 +343,14 @@ Please respond with valid JSON only, with no additional text or markdown."""
         doc_concepts: List[Dict[str, any]], issues: List[Dict[str, any]], original_raw: str
     ) -> str:
         """Build prompt instructing the model to correct malformed match responses."""
-        issues_text = "\n".join(f"- Entry {issue['index']}: {issue['error']}" for issue in issues) or "- (no details captured)"
-        doc_context = "\n".join(f"{idx}. {doc['description']}" for idx, doc in enumerate(doc_concepts)) or "No documentation concepts available."
+        issues_text = (
+            "\n".join(f"- Entry {issue['index']}: {issue['error']}" for issue in issues)
+            or "- (no details captured)"
+        )
+        doc_context = (
+            "\n".join(f"{idx}. {doc['description']}" for idx, doc in enumerate(doc_concepts))
+            or "No documentation concepts available."
+        )
         return (
             "Your previous JSON response listing matches between the code concept and documentation sections is invalid.\n"
             "Problems detected:\n"
@@ -377,7 +401,9 @@ Respond with JSON only:
             max_tokens=500,
             log_context=f"Extracting doc concept for section: {section_name}",
             validator=lambda data: self._validate_doc_response(data, section_name),
-            schema_retry_builder=lambda parsed, issues, raw: self._build_doc_retry_prompt(section_name, issues, raw),
+            schema_retry_builder=lambda parsed, issues, raw: self._build_doc_retry_prompt(
+                section_name, issues, raw
+            ),
         )
 
     def extract_code_concept(
@@ -415,7 +441,9 @@ Respond with JSON only:
             max_tokens=500,
             log_context=f"Extracting code concept for {file_path}:{location}",
             validator=lambda data: self._validate_code_response(data, location),
-            schema_retry_builder=lambda parsed, issues, raw: self._build_code_retry_prompt(location, issues, raw),
+            schema_retry_builder=lambda parsed, issues, raw: self._build_code_retry_prompt(
+                location, issues, raw
+            ),
         )
 
     def _expand_context(self, context_needed: dict, max_files: int = 5) -> Dict[str, str]:
@@ -586,8 +614,12 @@ Rules:
             prompt,
             max_tokens=1000,
             log_context=f"Matching code concept '{code_concept['description']}'",
-            validator=lambda data: self._validate_match_response(data, len(doc_concepts), _iteration),
-            schema_retry_builder=lambda parsed, issues, original_raw: self._build_match_retry_prompt(doc_concepts, issues, original_raw),
+            validator=lambda data: self._validate_match_response(
+                data, len(doc_concepts), _iteration
+            ),
+            schema_retry_builder=lambda parsed, issues, original_raw: self._build_match_retry_prompt(
+                doc_concepts, issues, original_raw
+            ),
         )
 
         # Check if we should perform iterative refinement
@@ -707,9 +739,7 @@ Rules:
         doc_concepts: List[Dict[str, any]], issues: List[Dict[str, any]], original_raw: str
     ) -> str:
         """Build prompt instructing the model to correct malformed match responses."""
-        issues_text = "\n".join(
-            f"- Entry {issue['index']}: {issue['error']}" for issue in issues
-        )
+        issues_text = "\n".join(f"- Entry {issue['index']}: {issue['error']}" for issue in issues)
 
         doc_context = "\n".join(
             f"{idx}. {doc['description']}" for idx, doc in enumerate(doc_concepts)

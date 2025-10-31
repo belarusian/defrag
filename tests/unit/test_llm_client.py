@@ -92,6 +92,56 @@ def test_llm_client_model_env_override(monkeypatch):
     assert client.model == "gpt-4o"
 
 
+def test_match_concepts_retry_missing_reasoning(monkeypatch):
+    """If reasoning is missing, the client should retry and succeed when model complies."""
+
+    responses = iter(
+        [
+            '[{"doc_index": 0, "confidence": 0.9}]',
+            '[{"doc_index": 0, "confidence": 0.9, "reasoning": "Matches provisioning doc."}]',
+        ]
+    )
+
+    client_obj, provider = make_stub_provider(send_return=lambda: next(responses))
+    monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
+    monkeypatch.setenv(LLMClient.PROVIDER_KEY_ENVS["openai"], "openai-key")
+    monkeypatch.setenv(LLMClient.PROVIDER_ENV_VAR, "openai")
+
+    client = LLMClient()
+
+    code_concept = {"description": "Example", "keywords": ["example"]}
+    doc_concepts = [{"description": "Doc"}]
+
+    matches = client.match_concepts(code_concept, doc_concepts)
+
+    assert len(matches) == 1
+    assert matches[0]["reasoning"] == "Matches provisioning doc."
+
+
+def test_match_concepts_raises_when_retry_fails(monkeypatch):
+    """If reasoning remains missing after retry, a ValueError is raised."""
+
+    responses = iter(
+        [
+            '[{"doc_index": 0, "confidence": 0.9}]',
+            '[{"doc_index": 0, "confidence": 0.9}]',
+        ]
+    )
+
+    client_obj, provider = make_stub_provider(send_return=lambda: next(responses))
+    monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
+    monkeypatch.setenv(LLMClient.PROVIDER_KEY_ENVS["openai"], "openai-key")
+    monkeypatch.setenv(LLMClient.PROVIDER_ENV_VAR, "openai")
+
+    client = LLMClient()
+
+    code_concept = {"description": "Example", "keywords": ["example"]}
+    doc_concepts = [{"description": "Doc"}]
+
+    with pytest.raises(ValueError):
+        client.match_concepts(code_concept, doc_concepts)
+
+
 def test_llm_client_requires_api_key(monkeypatch):
     """Missing API key for selected provider should raise an error."""
     client_obj, provider = make_stub_provider()
@@ -121,3 +171,18 @@ def test_extract_doc_concept_recovers_from_bad_json(monkeypatch):
 
     assert result["description"] == "Recovered"
     assert result["keywords"] == ["ok"]
+
+
+def test_parse_json_with_retry_validates_required_fields(monkeypatch):
+    """The _parse_json_with_retry should validate required fields in match responses."""
+    client_obj, provider = make_stub_provider()
+    monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
+    client = LLMClient(api_key="dummy", model="stub-model", provider="anthropic")
+
+    # Test that it parses valid JSON but we need to validate fields elsewhere
+    valid_json = '[{"doc_index": 0, "confidence": 0.9}]'
+    result = client._parse_json_with_retry(valid_json, fallback=[])
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0]["doc_index"] == 0

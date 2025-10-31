@@ -9,11 +9,18 @@ We welcome contributions! Here's how to get started.
 git clone https://github.com/kode-s/defrag.git
 cd defrag
 
-# Install in development mode
+# Recommended: bootstrap a virtualenv and install deps
+scripts/dev_setup.sh
+
+# Or install manually
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Set up API key for testing
-export ANTHROPIC_API_KEY=your_key_here
+# Set up API key for testing (choose provider)
+export ANTHROPIC_API_KEY=your_key_here           # Anthropic Claude (default)
+# export DEFRAG_LLM_PROVIDER=openai
+# export OPENAI_API_KEY=your_key_here            # OpenAI
 ```
 
 ## Running Tests
@@ -26,7 +33,7 @@ pytest
 pytest --cov=defrag --cov-report=html
 
 # Run specific test
-pytest tests/test_semantic.py::test_concept_matching
+pytest tests/unit/test_semantic_models.py::TestConcept::test_concept_creation
 ```
 
 ## Code Style
@@ -51,7 +58,7 @@ defrag/
 │   ├── indexer.py    # Index persistence
 │   ├── validator.py  # Physical validation
 │   ├── semantic.py   # Semantic models
-│   ├── llm.py        # LLM client
+│   ├── llm.py        # LLM client (provider abstraction)
 │   ├── analyzer.py   # Semantic analysis
 │   ├── fixer.py      # Auto-fix
 │   └── cli.py        # CLI interface
@@ -66,7 +73,7 @@ defrag/
 
 1. Add logic to `semantic.py` or `analyzer.py`
 2. Update `SemanticIndex` model if needed
-3. Add tests in `tests/test_semantic.py`
+3. Add tests in `tests/unit` or `tests/integration` as appropriate
 4. Update `docs/SEMANTIC.md`
 
 ### New CLI Command

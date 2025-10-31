@@ -283,23 +283,26 @@ def run():
 ''')
 
         # Run semantic-analyze
-        class Args:
-            root = tmpdir
-            verbose = True
-            limit_docs = 2  # Limit to reduce API calls
-            limit_code = 3  # Limit to reduce API calls
-            model = None  # Use default
-            api_key = None  # Use from env
-            output = None
-            provider = provider
-            iterations = 1
+        # Create args object (can't use class due to scope issues with provider variable)
+        from types import SimpleNamespace
+        args = SimpleNamespace(
+            root=tmpdir,
+            verbose=True,
+            limit_docs=None,  # No limits - test full functionality
+            limit_code=None,  # No limits - test full functionality
+            model=None,  # Use default
+            api_key=None,  # Use from env
+            output="semantic_index.json",  # Explicit output path
+            provider=provider,
+            iterations=1
+        )
 
         print(f"\nRunning semantic-analyze with intelligent discovery")
         print(f"Root: {tmpdir}")
         print(f"Provider: {provider}")
 
         # Run the command
-        result = cmd_semantic_analyze(Args())
+        result = cmd_semantic_analyze(args)
 
         # Check that semantic index was created
         index_path = Path(tmpdir, "semantic_index.json")
@@ -310,17 +313,24 @@ def run():
             index = json.load(f)
 
         print(f"\n✅ Semantic analysis completed successfully")
-        print(f"  - Concepts extracted: {len(index.get('concepts', []))}")
-        print(f"  - Matches found: {len(index.get('matches', []))}")
 
-        # The index should have discovered our files
-        concepts = index.get('concepts', [])
-        sources = [c.get('source') for c in concepts]
+        # Handle concepts as dictionary (concept_id -> concept_data)
+        concepts = index.get('concepts', {})
+        matches = index.get('matches', [])
 
-        # Should have found at least some files (limited by our limits)
-        assert len(sources) > 0, "Should have discovered and analyzed some files"
+        print(f"  - Concepts extracted: {len(concepts)}")
+        print(f"  - Matches found: {len(matches)}")
 
-        print(f"  - Files analyzed: {sources}")
+        # Should have found at least some concepts
+        assert len(concepts) > 0, "Should have discovered and analyzed some files"
+
+        # Extract source files from concepts
+        sources = set()
+        for concept_id, concept_data in concepts.items():
+            if isinstance(concept_data, dict) and 'source' in concept_data:
+                sources.add(concept_data['source'])
+
+        print(f"  - Source files analyzed: {sorted(sources)}")
 
 
 if __name__ == "__main__":

@@ -41,7 +41,7 @@ def cmd_semantic_analyze(args):
     # Initialize
     try:
         progress.log("Initializing LLM client...")
-        llm = LLMClient(model=args.model)
+        llm = LLMClient(model=args.model, root_dir=args.root)
         analyzer = SemanticAnalyzer(llm, root_dir=args.root)
         progress.log("LLM client ready")
     except Exception as e:
@@ -53,7 +53,7 @@ def cmd_semantic_analyze(args):
     # Step 1: Analyze documentation
     progress.section("Step 1: Documentation Analysis")
     progress.log("Scanning for documentation files...")
-    print("[1/5] Analyzing documentation...")
+    print("[1/4] Analyzing documentation...")
     doc_paths = scan_documentation(args.root)
     progress.log(f"Found {len(doc_paths)} documentation files")
     if args.limit_docs:
@@ -71,7 +71,7 @@ def cmd_semantic_analyze(args):
     # Step 2: Analyze code
     progress.section("Step 2: Code Analysis")
     progress.log("Scanning for code files...")
-    print("[2/5] Analyzing code...")
+    print("[2/4] Analyzing code...")
     # For now, scan Python files in specific directories
     import os
     import glob
@@ -96,33 +96,30 @@ def cmd_semantic_analyze(args):
     progress.log(f"Extracted {code_concept_count} code concepts")
     print(f"  Extracted {code_concept_count} code concepts\n")
 
-    # Step 3: Match concepts
+    # Step 3: Match concepts (with automatic iterative refinement)
     progress.section("Step 3: Concept Matching")
     progress.log(
         f"Matching {code_concept_count} code concepts to {doc_concept_count} doc concepts..."
     )
+    progress.log("(automatic iterative refinement enabled for low-confidence matches)")
     progress.update_state("matching_concepts")
-    print("[3/5] Matching code to documentation...")
+    print("[3/4] Matching code to documentation (with automatic refinement)...")
     analyzer.match_all_concepts(verbose=args.verbose)
     match_count = len(analyzer.index.matches)
-    progress.log(f"Found {match_count} initial matches")
-    print(f"  Found {match_count} matches\n")
+    high_conf_count = sum(1 for m in analyzer.index.matches if m.confidence >= 0.7)
+    refined_count = sum(1 for m in analyzer.index.matches if m.iterations > 1)
+    progress.log(
+        f"Found {match_count} matches ({high_conf_count} high-confidence, {refined_count} refined)"
+    )
+    print(f"  Found {match_count} matches ({high_conf_count} high-confidence)\n")
+    if refined_count > 0:
+        print(f"  {refined_count} matches refined through context expansion\n")
 
-    # Step 4: Refine low-confidence matches
-    progress.section("Step 4: Iterative Refinement")
-    low_conf_count = sum(1 for m in analyzer.index.matches if m.confidence < 0.7)
-    progress.log(f"Refining {low_conf_count} low-confidence matches (context expansion)...")
-    progress.update_state("refining_matches", low_confidence_count=low_conf_count)
-    print("[4/5] Refining low-confidence matches (iterative context expansion)...")
-    analyzer.refine_low_confidence_matches(max_iterations=3, verbose=args.verbose)
-    progress.log("Refinement complete")
-    print("  Refinement complete\n")
-
-    # Step 5: Validate with physical links
-    progress.section("Step 5: Physical Link Validation")
+    # Step 4: Validate with physical links
+    progress.section("Step 4: Physical Link Validation")
     progress.log("Validating matches with physical link checker...")
     progress.update_state("validating_links")
-    print("[5/5] Validating with physical links (grounding heuristic)...")
+    print("[4/4] Validating with physical links (grounding heuristic)...")
     analyzer.validate_with_physical_links(verbose=args.verbose)
     progress.log("Physical validation complete")
 

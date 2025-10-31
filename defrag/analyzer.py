@@ -41,7 +41,7 @@ class SemanticAnalyzer:
             llm_client: LLM client for semantic analysis
             root_dir: Root directory of codebase
         """
-        self.llm = llm_client or LLMClient()
+        self.llm = llm_client or LLMClient(root_dir=root_dir)
         self.root_dir = root_dir
         self.index = SemanticIndex()
 
@@ -150,12 +150,13 @@ class SemanticAnalyzer:
                 self.analyze_python_file(code_path, verbose)
             # Add support for other languages here (TypeScript, etc.)
 
-    def match_all_concepts(self, verbose: bool = False) -> None:
+    def match_all_concepts(self, verbose: bool = False, max_iterations: int = 1) -> None:
         """
         Match code concepts to documentation concepts.
 
         Args:
             verbose: Print progress
+            max_iterations: Max refinement iterations (0 to disable auto-refinement)
         """
         code_concepts = self.index.get_code_concepts()
         doc_concepts = self.index.get_doc_concepts()
@@ -174,13 +175,14 @@ class SemanticAnalyzer:
             if verbose:
                 print(f"\nMatching: {code_concept.source}:{code_concept.location}")
 
-            # Get matches from LLM
+            # Get matches from LLM (with automatic refinement)
             matches = self.llm.match_concepts(
                 {
                     "description": code_concept.description,
                     "keywords": code_concept.keywords,
                 },
                 doc_concept_list,
+                max_iterations=max_iterations,
             )
 
             for match in matches:

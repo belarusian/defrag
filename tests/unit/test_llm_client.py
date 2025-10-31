@@ -186,3 +186,45 @@ def test_parse_json_with_retry_validates_required_fields(monkeypatch):
     assert isinstance(result, list)
     assert len(result) == 1
     assert result[0]["doc_index"] == 0
+
+
+def test_request_json_parse_then_schema_retry_uses_correct_raw(monkeypatch):
+    """Test that schema retry gets the parsed response, not the unparseable one."""
+    responses = iter([
+        "not valid json at all",  # First response - unparseable
+        '{"description": "parsed but incomplete"}',  # Parse retry - parseable but missing fields
+        '{"description": "complete", "keywords": ["test"]}',  # Schema retry - complete
+    ])
+
+    client_obj, provider = make_stub_provider(send_return=lambda: next(responses))
+    monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
+    monkeypatch.setenv(LLMClient.PROVIDER_KEY_ENVS["openai"], "openai-key")
+    monkeypatch.setenv(LLMClient.PROVIDER_ENV_VAR, "openai")
+
+    client = LLMClient()
+
+    # Track what raw text is passed to schema retry builder
+    schema_retry_raw = None
+
+    def capture_schema_retry(parsed, issues, raw):
+        nonlocal schema_retry_raw
+        schema_retry_raw = raw
+        # Return a retry prompt
+        return "Please fix the schema issues"
+
+    # Use extract_doc_concept as it uses _request_json
+    result = client._request_json(
+        "test prompt",
+        max_tokens=500,
+        log_context="test context",
+        validator=lambda data: client._validate_doc_response(data, "test"),
+        schema_retry_builder=capture_schema_retry
+    )
+
+    # The schema retry should have received the PARSED response, not the original unparseable one
+    assert schema_retry_raw == '{"description": "parsed but incomplete"}'
+    assert "not valid json" not in schema_retry_raw
+
+    # And the final result should be valid
+    assert result["description"] == "complete"
+    assert result["keywords"] == ["test"]

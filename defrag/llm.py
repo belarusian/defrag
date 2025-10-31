@@ -109,6 +109,8 @@ class LLMClient:
             raw_retry = self._send_prompt(retry_prompt, max_tokens=max_tokens)
             logger.debug("Parse retry raw response: %s", raw_retry[:500])
             parsed = self._parse_json_content(raw_retry)
+            # Update raw to the successfully parsed response for potential schema retry
+            raw = raw_retry
 
         normalized, issues = validator(parsed)
 

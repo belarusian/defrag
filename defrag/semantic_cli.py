@@ -41,13 +41,13 @@ def cmd_semantic_analyze(args):
     # Initialize
     try:
         progress.log("Initializing LLM client...")
-        llm = LLMClient(model=args.model, root_dir=args.root)
+        llm = LLMClient(model=args.model, provider=args.provider, root_dir=args.root)
         analyzer = SemanticAnalyzer(llm, root_dir=args.root)
         progress.log("LLM client ready")
     except Exception as e:
         progress.log(f"ERROR: {e}")
         print(f"Error initializing LLM client: {e}")
-        print("\nHint: Set ANTHROPIC_API_KEY environment variable")
+        print("\nHint: Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable")
         return 1
 
     # Step 1: Analyze documentation
@@ -345,7 +345,13 @@ def add_semantic_commands(subparsers, parent_parser):
         parents=[parent_parser],
     )
     parser_analyze.add_argument(
-        "--model", default="claude-sonnet-4-5-20250929", help="LLM model to use"
+        "--model", default=None, help="LLM model to use (defaults based on provider)"
+    )
+    parser_analyze.add_argument(
+        "--provider",
+        choices=["anthropic", "openai"],
+        default=None,
+        help="LLM provider (auto-detected from API keys if not specified)",
     )
     parser_analyze.add_argument(
         "--output", default=DEFAULT_SEMANTIC_INDEX, help="Output file for semantic index"

@@ -18,26 +18,62 @@ class LLMClient:
     """
     Client for interacting with LLM for semantic analysis.
 
-    Uses Anthropic Claude API (or can be adapted for other providers).
+    Supports Anthropic Claude and OpenAI GPT models.
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-sonnet-4-5-20250929",
+        model: Optional[str] = None,
         root_dir: str = ".",
+        provider: Optional[str] = None,
     ):
         """
         Initialize LLM client.
 
         Args:
-            api_key: Anthropic API key (or reads from ANTHROPIC_API_KEY env var)
-            model: Model to use for analysis
+            api_key: API key (auto-detects from ANTHROPIC_API_KEY or OPENAI_API_KEY)
+            model: Model to use (defaults: claude-sonnet-4-5-20250929 or gpt-4o)
             root_dir: Root directory for context expansion
+            provider: "anthropic" or "openai" (auto-detected if not specified)
         """
-        self.api_key = (api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
-        self.model = model
         self.root_dir = root_dir
+
+        # Auto-detect provider if not specified
+        if provider is None:
+            if os.getenv("ANTHROPIC_API_KEY"):
+                provider = "anthropic"
+            elif os.getenv("OPENAI_API_KEY"):
+                provider = "openai"
+            else:
+                raise ValueError(
+                    "No API key found. Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable."
+                )
+
+        self.provider = provider.lower()
+
+        # Set default models per provider
+        if model is None:
+            if self.provider == "anthropic":
+                model = "claude-sonnet-4-5-20250929"
+            elif self.provider == "openai":
+                model = "gpt-4o"
+            else:
+                raise ValueError(f"Unknown provider: {provider}")
+
+        self.model = model
+
+        # Initialize provider-specific client
+        if self.provider == "anthropic":
+            self._init_anthropic(api_key)
+        elif self.provider == "openai":
+            self._init_openai(api_key)
+        else:
+            raise ValueError(f"Unsupported provider: {provider}")
+
+    def _init_anthropic(self, api_key: Optional[str]):
+        """Initialize Anthropic client."""
+        self.api_key = (api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
 
         if not self.api_key:
             raise ValueError(
@@ -54,6 +90,56 @@ class LLMClient:
             raise ImportError(
                 "anthropic package not installed. Install with: pip install anthropic"
             )
+
+    def _init_openai(self, api_key: Optional[str]):
+        """Initialize OpenAI client."""
+        self.api_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
+
+        if not self.api_key:
+            raise ValueError(
+                "OPENAI_API_KEY not found. Set environment variable or pass api_key parameter."
+            )
+
+        try:
+            import openai
+
+            logger.info(f"Initializing OpenAI client with model: {self.model}")
+            self.client = openai.OpenAI(api_key=self.api_key)
+            logger.info("OpenAI client initialized successfully")
+        except ImportError:
+            raise ImportError("openai package not installed. Install with: pip install openai")
+
+    def _call_llm(self, prompt: str, max_tokens: int = 1000):
+        """
+        Call LLM with unified interface for both providers.
+
+        Args:
+            prompt: The prompt to send
+            max_tokens: Maximum tokens in response
+
+        Returns:
+            Response object (provider-specific, but with normalized text extraction)
+        """
+        if self.provider == "anthropic":
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            # Add a helper attribute for unified text extraction
+            response._text = response.content[0].text
+            return response
+        elif self.provider == "openai":
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            # Add a helper attribute for unified text extraction
+            response._text = response.choices[0].message.content
+            return response
+        else:
+            raise ValueError(f"Unsupported provider: {self.provider}")
 
     def extract_doc_concept(self, section_name: str, content: str) -> Dict[str, any]:
         """
@@ -83,11 +169,7 @@ Respond with JSON only:
 
         try:
             logger.debug(f"Extracting doc concept for section: {section_name}")
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            response = self._call_llm(prompt, max_tokens=500)
             logger.debug("Doc concept extraction API call succeeded")
         except Exception as e:
             logger.error(f"Doc concept extraction API call failed: {type(e).__name__}: {e}")
@@ -134,11 +216,7 @@ Respond with JSON only:
 
         try:
             logger.debug(f"Extracting code concept for {file_path}:{location}")
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            response = self._call_llm(prompt, max_tokens=500)
             logger.debug("Code concept extraction API call succeeded")
         except Exception as e:
             logger.error(f"Code concept extraction API call failed: {type(e).__name__}: {e}")
@@ -319,11 +397,7 @@ Rules:
 
         try:
             logger.debug(f"Matching code concept to {len(doc_concepts)} doc concepts")
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            response = self._call_llm(prompt, max_tokens=1000)
             logger.debug("Concept matching API call succeeded")
         except Exception as e:
             logger.error(f"Concept matching failed: {type(e).__name__}: {e}")
@@ -427,7 +501,7 @@ Rules:
         Returns:
             Parsed JSON object or fallback value
         """
-        text = response.content[0].text.strip()
+        text = response._text.strip()
 
         # Simple, deterministic parsing logic
         def parse_json(content: str):
@@ -478,12 +552,8 @@ Please provide ONLY valid JSON with no additional text, explanations, or markdow
 
             try:
                 logger.debug("Requesting LLM to fix JSON formatting")
-                retry_response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=1000,
-                    messages=[{"role": "user", "content": retry_prompt}],
-                )
-                retry_text = retry_response.content[0].text.strip()
+                retry_response = self._call_llm(retry_prompt, max_tokens=1000)
+                retry_text = retry_response._text.strip()
                 result = parse_json(retry_text)
                 logger.info("JSON parsed successfully after retry")
                 return result

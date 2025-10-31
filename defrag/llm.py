@@ -84,27 +84,11 @@ Respond with JSON only:
             logger.error(f"Doc concept extraction API call failed: {type(e).__name__}: {e}")
             raise
 
-        try:
-            # Strip markdown code blocks if present
-            text = response.content[0].text.strip()
-            logger.debug(f"Raw LLM response text (first 200 chars): {text[:200]}")
-            if text.startswith("```"):
-                # Remove ```json or ``` prefix and ``` suffix
-                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-                text = text.rsplit("```", 1)[0].strip()
-            logger.debug(f"Cleaned text for JSON parsing: {text[:200]}")
-            result = json.loads(text)
-            return {
-                "description": result.get("description", ""),
-                "keywords": result.get("keywords", []),
-            }
-        except (json.JSONDecodeError, IndexError) as e:
-            # Fallback
-            logger.warning(f"Failed to parse LLM response as JSON: {e}. Using fallback.")
-            return {
-                "description": f"Documentation section: {section_name}",
-                "keywords": [section_name.lower()],
-            }
+        # Parse response with self-correction
+        return self._parse_json_with_retry(response, {
+            "description": f"Documentation section: {section_name}",
+            "keywords": [section_name.lower()],
+        })
 
     def extract_code_concept(
         self, file_path: str, location: str, code_snippet: str
@@ -148,26 +132,11 @@ Respond with JSON only:
             logger.error(f"Code concept extraction API call failed: {type(e).__name__}: {e}")
             raise
 
-        try:
-            # Strip markdown code blocks if present
-            text = response.content[0].text.strip()
-            logger.debug(f"Raw LLM response text (first 200 chars): {text[:200]}")
-            if text.startswith("```"):
-                # Remove ```json or ``` prefix and ``` suffix
-                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-                text = text.rsplit("```", 1)[0].strip()
-            logger.debug(f"Cleaned text for JSON parsing: {text[:200]}")
-            result = json.loads(text)
-            return {
-                "description": result.get("description", ""),
-                "keywords": result.get("keywords", []),
-            }
-        except (json.JSONDecodeError, IndexError) as e:
-            logger.warning(f"Failed to parse LLM response as JSON: {e}. Using fallback.")
-            return {
-                "description": f"Code at {location}",
-                "keywords": [location.lower()],
-            }
+        # Parse response with self-correction
+        return self._parse_json_with_retry(response, {
+            "description": f"Code at {location}",
+            "keywords": [location.lower()],
+        })
 
     def match_concepts(
         self, code_concept: Dict[str, any], doc_concepts: List[Dict[str, any]]
@@ -234,23 +203,9 @@ Rules:
             logger.error(f"Concept matching failed: {type(e).__name__}: {e}")
             raise
 
-        try:
-            # Strip markdown code blocks if present
-            text = response.content[0].text.strip()
-            logger.debug(f"Raw LLM response text (first 200 chars): {text[:200]}")
-            if text.startswith("```"):
-                # Extract content between ``` markers
-                text = text.split("```", 2)[1] if text.count("```") >= 2 else text[3:]
-                # Remove language identifier (e.g., "json")
-                if "\n" in text:
-                    text = text.split("\n", 1)[1]
-                text = text.strip()
-            logger.debug(f"Cleaned text for JSON parsing: {text[:200]}")
-            matches = json.loads(text)
-            return matches if isinstance(matches, list) else []
-        except (json.JSONDecodeError, IndexError) as e:
-            logger.warning(f"Failed to parse match response as JSON: {e}. Returning empty matches.")
-            return []
+        # Parse response with self-correction
+        result = self._parse_json_with_retry(response, fallback=[])
+        return result if isinstance(result, list) else []
 
     def batch_extract_doc_concepts(self, sections: List[tuple]) -> List[Dict[str, any]]:
         """
@@ -267,3 +222,78 @@ Rules:
             concept = self.extract_doc_concept(section_name, content)
             concepts.append(concept)
         return concepts
+
+    def _parse_json_with_retry(self, response, fallback):
+        """
+        Parse JSON from LLM response with self-correction retry.
+
+        Args:
+            response: Anthropic API response object
+            fallback: Value to return if parsing fails after retry
+
+        Returns:
+            Parsed JSON object or fallback value
+        """
+        text = response.content[0].text.strip()
+
+        # Simple, deterministic parsing logic
+        def parse_json(content: str):
+            """Clean parser: strip markdown code blocks and parse JSON."""
+            cleaned = content.strip()
+            if cleaned.startswith("```"):
+                # Extract content between first pair of ``` markers
+                parts = cleaned.split("```")
+                if len(parts) >= 3:
+                    cleaned = parts[1]
+                    # Remove language identifier if present
+                    if "\n" in cleaned:
+                        cleaned = cleaned.split("\n", 1)[1]
+            return json.loads(cleaned.strip())
+
+        # First attempt
+        try:
+            result = parse_json(text)
+            logger.debug("JSON parsed successfully on first attempt")
+            return result
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse failed: {e}")
+
+            # Ask LLM to fix its own response
+            retry_prompt = f"""Your previous response could not be parsed as JSON. Here's the error:
+
+Error: {e}
+
+Here's the parser code that's trying to read your response:
+```python
+def parse_json(content: str):
+    cleaned = content.strip()
+    if cleaned.startswith("```"):
+        parts = cleaned.split("```")
+        if len(parts) >= 3:
+            cleaned = parts[1]
+            if "\\n" in cleaned:
+                cleaned = cleaned.split("\\n", 1)[1]
+    return json.loads(cleaned.strip())
+```
+
+Your original response was:
+```
+{text[:500]}
+```
+
+Please provide ONLY valid JSON with no additional text, explanations, or markdown formatting."""
+
+            try:
+                logger.debug("Requesting LLM to fix JSON formatting")
+                retry_response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=1000,
+                    messages=[{"role": "user", "content": retry_prompt}],
+                )
+                retry_text = retry_response.content[0].text.strip()
+                result = parse_json(retry_text)
+                logger.info("JSON parsed successfully after retry")
+                return result
+            except Exception as retry_error:
+                logger.error(f"Retry also failed: {retry_error}. Using fallback.")
+                return fallback

@@ -5,7 +5,6 @@ Tests the full end-to-end workflow with real LLM API calls.
 Requires ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.
 """
 
-import os
 import pytest
 import tempfile
 import shutil

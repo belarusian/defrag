@@ -12,6 +12,7 @@ Usage:
 import argparse
 import os
 import sys
+from typing import Optional
 
 # Add parent dir to path for local development
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -21,7 +22,14 @@ from defrag.llm import LLMClient
 from defrag.scanner import scan_documentation
 
 
-def run_demo(icegraph_path: str, limit_docs: int = 5, limit_code: int = 10):
+def run_demo(
+    icegraph_path: str,
+    limit_docs: int = 5,
+    limit_code: int = 10,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+):
     """
     Run defrag analysis on IceGraph project.
 
@@ -43,11 +51,21 @@ def run_demo(icegraph_path: str, limit_docs: int = 5, limit_code: int = 10):
     print(f"Limits: {limit_docs} docs, {limit_code} code files")
     print()
 
+    provider_name = (provider or os.getenv(LLMClient.PROVIDER_ENV_VAR, "anthropic")).lower()
+    if provider_name not in LLMClient.SUPPORTED_PROVIDERS:
+        valid = ", ".join(sorted(LLMClient.SUPPORTED_PROVIDERS))
+        print(f"Error: Unsupported provider '{provider_name}'. Choose from: {valid}")
+        return 1
+    key_env = LLMClient.PROVIDER_KEY_ENVS.get(provider_name)
+    resolved_api_key = api_key or (os.getenv(key_env) if key_env else None)
+
     # Check for API key
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        print("Warning: ANTHROPIC_API_KEY not set")
+    if not resolved_api_key:
+        env_hint = key_env or "provider API key"
+        print(f"Warning: {env_hint} not set for provider '{provider_name}'")
         print("Set it to run semantic analysis:")
-        print("  export ANTHROPIC_API_KEY=your_key_here")
+        if key_env:
+            print(f"  export {key_env}=your_key_here")
         print()
         print("Running physical validation only...")
         print()
@@ -64,9 +82,13 @@ def run_demo(icegraph_path: str, limit_docs: int = 5, limit_code: int = 10):
     # Initialize analyzer
     print("[1/4] Initializing LLM client...")
     try:
-        llm = LLMClient()
+        llm = LLMClient(provider=provider_name, model=model, api_key=resolved_api_key)
         analyzer = SemanticAnalyzer(llm, root_dir=icegraph_path)
-        print("  Connected to Claude API")
+        provider_label = {
+            "anthropic": "Anthropic Claude",
+            "openai": "OpenAI",
+        }.get(provider_name, provider_name.title())
+        print(f"  Connected to {provider_label} API")
     except Exception as e:
         print(f"  Error: {e}")
         return 1
@@ -188,10 +210,30 @@ def main():
     parser.add_argument(
         "--limit-code", type=int, default=10, help="Limit number of code files (for demo speed)"
     )
+    parser.add_argument(
+        "--provider",
+        choices=sorted(LLMClient.SUPPORTED_PROVIDERS),
+        help="LLM provider to use",
+    )
+    parser.add_argument(
+        "--model",
+        help="Override model for the selected provider",
+    )
+    parser.add_argument(
+        "--api-key",
+        help="Override API key for the selected provider",
+    )
 
     args = parser.parse_args()
 
-    return run_demo(args.icegraph_path, args.limit_docs, args.limit_code)
+    return run_demo(
+        args.icegraph_path,
+        args.limit_docs,
+        args.limit_code,
+        provider=args.provider,
+        model=args.model,
+        api_key=args.api_key,
+    )
 
 
 if __name__ == "__main__":

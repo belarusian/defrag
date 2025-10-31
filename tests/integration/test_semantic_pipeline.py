@@ -2,7 +2,7 @@
 Integration tests for semantic analysis pipeline.
 
 Tests the full end-to-end workflow with real LLM API calls.
-Requires ANTHROPIC_API_KEY environment variable.
+Requires real LLM credentials (Anthropic or OpenAI) to succeed.
 """
 
 import os
@@ -29,10 +29,16 @@ def fixture_codebase():
         yield tmpdir
 
 
+_MISSING_CREDS_REASON = "Requires ANTHROPIC_API_KEY or OPENAI_API_KEY for real LLM calls"
+
+
+def _has_llm_credentials() -> bool:
+    """Return True if a supported provider has credentials configured."""
+    return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"))
+
+
 @pytest.mark.integration
-@pytest.mark.skipif(
-    not os.getenv("ANTHROPIC_API_KEY"), reason="Requires ANTHROPIC_API_KEY for real API calls"
-)
+@pytest.mark.skipif(not _has_llm_credentials(), reason=_MISSING_CREDS_REASON)
 class TestSemanticPipeline:
     """Integration tests using real LLM API."""
 

@@ -82,14 +82,18 @@ python -m tools.defrag mark --doc contracts/sparkplug_brick_example.md --status 
 python -m tools.defrag report
 ```
 
-### Semantic Analysis (Requires ANTHROPIC_API_KEY)
+### Semantic Analysis (Provider + API Key Required)
 
 ```bash
-# Set API key
-export ANTHROPIC_API_KEY=your_key_here
+# Set provider + API key
+export ANTHROPIC_API_KEY=your_key_here            # default provider: Anthropic Claude
+# export DEFRAG_LLM_PROVIDER=openai
+# export OPENAI_API_KEY=your_key_here             # use for OpenAI models
+# export DEFRAG_LLM_MODEL=gpt-4o                  # optional model override
 
 # Run full semantic analysis
 python -m tools.defrag semantic-analyze --verbose
+# python -m tools.defrag semantic-analyze --provider openai
 
 # View semantic report
 python -m tools.defrag semantic-report --show-gc
@@ -203,7 +207,7 @@ python -m tools.defrag mark --doc docs/FIXED.md --status good
 
 **Semantic Layer**:
 - `semantic.py` - Concept models (Concept, Match, SemanticIndex)
-- `llm.py` - LLM client (Anthropic Claude API)
+- `llm.py` - LLM client (Anthropic/OpenAI API)
 - `analyzer.py` - Semantic analysis orchestrator
 - `fixer.py` - Auto-fix missing physical links
 - `semantic_cli.py` - Semantic CLI commands

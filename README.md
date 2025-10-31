@@ -57,7 +57,14 @@ Or from source:
 ```bash
 git clone https://github.com/kode-s/defrag.git
 cd defrag
-pip install -e .
+
+# Recommended: create a virtualenv and install deps
+scripts/dev_setup.sh
+
+# Or do it manually:
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
 ### Basic Usage
@@ -68,8 +75,13 @@ defrag index                    # Catalog documentation
 defrag validate --doc README.md  # Check links
 defrag report                   # Show status
 
-# Semantic analysis (requires ANTHROPIC_API_KEY)
+# Semantic analysis (set provider + API key)
+# Anthropic Claude (default):
 export ANTHROPIC_API_KEY=your_key_here
+# OpenAI (defaults to gpt-5-mini-2025-08-07):
+# export DEFRAG_LLM_PROVIDER=openai
+# export OPENAI_API_KEY=your_key_here
+# export DEFRAG_LLM_MODEL=gpt-4o   # optional override
 
 defrag semantic-analyze --verbose        # Full analysis
 defrag semantic-report --show-gc         # View results
@@ -160,10 +172,12 @@ defrag gc --show                          # Show GC candidates
 ### Semantic Layer (LLM-Powered)
 
 ```bash
-# Requires ANTHROPIC_API_KEY environment variable
+# Requires provider + API key (ANTHROPIC_API_KEY or OPENAI_API_KEY)
 
 defrag semantic-analyze [options]
-  --model MODEL           LLM model (default: claude-sonnet-4-5-20250929)
+  --provider NAME         LLM provider (anthropic | openai)
+  --model MODEL           LLM model (defaults per provider)
+  --api-key KEY           Override API key
   --limit-docs N          Limit docs for testing
   --limit-code N          Limit code files for testing
   --verbose               Show progress
@@ -191,7 +205,7 @@ defrag/
 ├── indexer.py        # Index persistence
 ├── validator.py      # Physical link validation
 ├── semantic.py       # Semantic models
-├── llm.py            # LLM client (Anthropic)
+├── llm.py            # LLM client (Anthropic/OpenAI)
 ├── analyzer.py       # Semantic analysis orchestrator
 ├── fixer.py          # Auto-fix missing links
 ├── cli.py            # CLI interface
@@ -223,7 +237,7 @@ LLM API calls for full analysis:
 ## Requirements
 
 - Python 3.8+
-- Anthropic API key (for semantic analysis)
+- Anthropic or OpenAI API key (for semantic analysis)
 
 ## License
 

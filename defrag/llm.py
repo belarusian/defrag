@@ -18,42 +18,165 @@ class LLMClient:
     """
     Client for interacting with LLM for semantic analysis.
 
-    Uses Anthropic Claude API (or can be adapted for other providers).
+    Supports multiple providers (Anthropic Claude, OpenAI).
     """
+
+    PROVIDER_ENV_VAR = "DEFRAG_LLM_PROVIDER"
+    SUPPORTED_PROVIDERS = {"anthropic", "openai"}
+    MODEL_ENV_VAR = "DEFRAG_LLM_MODEL"
+    DEFAULT_MODELS = {
+        "anthropic": "claude-sonnet-4-5-20250929",
+        "openai": "gpt-5-mini-2025-08-07",
+    }
+    PROVIDER_KEY_ENVS = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-sonnet-4-5-20250929",
+        model: Optional[str] = None,
+        provider: Optional[str] = None,
         root_dir: str = ".",
     ):
         """
         Initialize LLM client.
 
         Args:
-            api_key: Anthropic API key (or reads from ANTHROPIC_API_KEY env var)
-            model: Model to use for analysis
+            api_key: Provider API key (or reads from provider-specific env var)
+            model: Model to use for analysis (default depends on provider)
+            provider: LLM provider (anthropic, openai)
             root_dir: Root directory for context expansion
         """
-        self.api_key = (api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
-        self.model = model
+        provider_name = provider or os.getenv(self.PROVIDER_ENV_VAR, "anthropic")
+        self.provider = provider_name.lower()
+
+        if self.provider not in self.SUPPORTED_PROVIDERS:
+            raise ValueError(
+                f"Unsupported provider '{self.provider}'. "
+                f"Supported providers: {', '.join(sorted(self.SUPPORTED_PROVIDERS))}"
+            )
+
+        key_env = self.PROVIDER_KEY_ENVS[self.provider]
+        self.api_key = (api_key or os.getenv(key_env, "")).strip()
+        env_model = os.getenv(self.MODEL_ENV_VAR)
+        self.model = (
+            model
+            or (env_model.strip() if env_model else None)
+            or self.DEFAULT_MODELS[self.provider]
+        )
         self.root_dir = root_dir
 
         if not self.api_key:
             raise ValueError(
-                "ANTHROPIC_API_KEY not found. Set environment variable or pass api_key parameter."
+                f"{key_env} not found for provider '{self.provider}'. "
+                "Set environment variable or pass api_key parameter."
             )
 
+        self.client, self._provider = self._initialize_provider()
+
+    def _initialize_provider(self):
+        """Initialize provider-specific strategy."""
+        if self.provider == "anthropic":
+            provider = _AnthropicProvider(self.model, self.api_key)
+            return provider.client, provider
+
+        if self.provider == "openai":
+            provider = _OpenAIProvider(self.model, self.api_key)
+            return provider.client, provider
+
+        raise RuntimeError(f"Provider '{self.provider}' not implemented")
+
+    def _send_prompt(self, prompt: str, max_tokens: int) -> str:
+        """Send prompt to provider and return raw text response."""
+        return self._provider.send_prompt(prompt, max_tokens)
+
+    def _request_json(self, prompt: str, max_tokens: int, fallback, log_context: str):
+        """Send prompt, parse JSON, and handle logging."""
         try:
-            import anthropic
+            logger.debug(log_context)
+            raw = self._send_prompt(prompt, max_tokens=max_tokens)
+            logger.debug(f"{log_context} - API call succeeded")
+        except Exception as e:
+            logger.error(f"{log_context} failed: {type(e).__name__}: {e}")
+            raise
 
-            logger.info(f"Initializing Anthropic client with model: {self.model}")
-            self.client = anthropic.Anthropic(api_key=self.api_key)
-            logger.info("Anthropic client initialized successfully")
-        except ImportError:
-            raise ImportError(
-                "anthropic package not installed. Install with: pip install anthropic"
-            )
+        return self._parse_json_with_retry(raw, fallback, max_tokens=max_tokens)
+
+    def _parse_json_with_retry(self, raw_text: str, fallback, max_tokens: int = 1000):
+        """
+        Parse JSON from LLM response with self-correction retry.
+
+        Args:
+            raw_text: Response text from provider
+            fallback: Value to return if parsing fails after retry
+
+        Returns:
+            Parsed JSON object or fallback value
+        """
+        text = (raw_text or "").strip()
+
+        if not text:
+            logger.warning("Empty response from LLM, using fallback")
+            return fallback
+
+        # Simple, deterministic parsing logic
+        def parse_json(content: str):
+            """Clean parser: strip markdown code blocks and parse JSON."""
+            cleaned = content.strip()
+            if cleaned.startswith("```"):
+                # Extract content between first pair of ``` markers
+                parts = cleaned.split("```")
+                if len(parts) >= 3:
+                    cleaned = parts[1]
+                    # Remove language identifier if present
+                    if "\n" in cleaned:
+                        cleaned = cleaned.split("\n", 1)[1]
+            return json.loads(cleaned.strip())
+
+        # First attempt
+        try:
+            result = parse_json(text)
+            logger.debug("JSON parsed successfully on first attempt")
+            return result
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse failed: {e}")
+
+            # Ask LLM to fix its own response
+            retry_prompt = f"""Your previous response could not be parsed as JSON. Here's the error:
+
+Error: {e}
+
+Here's the parser code that's trying to read your response:
+```python
+def parse_json(content: str):
+    cleaned = content.strip()
+    if cleaned.startswith("```"):
+        parts = cleaned.split("```")
+        if len(parts) >= 3:
+            cleaned = parts[1]
+            if "\\n" in cleaned:
+                cleaned = cleaned.split("\\n", 1)[1]
+    return json.loads(cleaned.strip())
+```
+
+Your original response was:
+```
+{text[:500]}
+```
+
+Please provide ONLY valid JSON with no additional text, explanations, or markdown formatting."""
+
+            try:
+                logger.debug("Requesting LLM to fix JSON formatting")
+                retry_raw = self._send_prompt(retry_prompt, max_tokens=max_tokens)
+                result = parse_json(retry_raw.strip())
+                logger.info("JSON parsed successfully after retry")
+                return result
+            except Exception as retry_error:
+                logger.error(f"Retry also failed: {retry_error}. Using fallback.")
+                return fallback
 
     def extract_doc_concept(self, section_name: str, content: str) -> Dict[str, any]:
         """
@@ -81,25 +204,15 @@ Respond with JSON only:
   "keywords": ["key", "terms", "list"]
 }}"""
 
-        try:
-            logger.debug(f"Extracting doc concept for section: {section_name}")
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            logger.debug("Doc concept extraction API call succeeded")
-        except Exception as e:
-            logger.error(f"Doc concept extraction API call failed: {type(e).__name__}: {e}")
-            raise
-
-        # Parse response with self-correction
-        return self._parse_json_with_retry(
-            response,
-            {
-                "description": f"Documentation section: {section_name}",
-                "keywords": [section_name.lower()],
-            },
+        fallback = {
+            "description": f"Documentation section: {section_name}",
+            "keywords": [section_name.lower()],
+        }
+        return self._request_json(
+            prompt,
+            max_tokens=500,
+            fallback=fallback,
+            log_context=(f"Extracting doc concept for section: {section_name}"),
         )
 
     def extract_code_concept(
@@ -132,25 +245,15 @@ Respond with JSON only:
   "keywords": ["key", "concepts", "list"]
 }}"""
 
-        try:
-            logger.debug(f"Extracting code concept for {file_path}:{location}")
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            logger.debug("Code concept extraction API call succeeded")
-        except Exception as e:
-            logger.error(f"Code concept extraction API call failed: {type(e).__name__}: {e}")
-            raise
-
-        # Parse response with self-correction
-        return self._parse_json_with_retry(
-            response,
-            {
-                "description": f"Code at {location}",
-                "keywords": [location.lower()],
-            },
+        fallback = {
+            "description": f"Code at {location}",
+            "keywords": [location.lower()],
+        }
+        return self._request_json(
+            prompt,
+            max_tokens=500,
+            fallback=fallback,
+            log_context=(f"Extracting code concept for {file_path}:{location}"),
         )
 
     def _expand_context(self, context_needed: dict, max_files: int = 5) -> Dict[str, str]:
@@ -319,18 +422,14 @@ Rules:
 
         try:
             logger.debug(f"Matching code concept to {len(doc_concepts)} doc concepts")
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            raw = self._send_prompt(prompt, max_tokens=1000)
             logger.debug("Concept matching API call succeeded")
         except Exception as e:
             logger.error(f"Concept matching failed: {type(e).__name__}: {e}")
             raise
 
         # Parse response with self-correction
-        result = self._parse_json_with_retry(response, fallback=[])
+        result = self._parse_json_with_retry(raw, fallback=[], max_tokens=1000)
         matches = result if isinstance(result, list) else []
 
         # Add iteration count to matches
@@ -416,77 +515,87 @@ Rules:
             concepts.append(concept)
         return concepts
 
-    def _parse_json_with_retry(self, response, fallback):
-        """
-        Parse JSON from LLM response with self-correction retry.
 
-        Args:
-            response: Anthropic API response object
-            fallback: Value to return if parsing fails after retry
+class _AnthropicProvider:
+    """Provider strategy for Anthropic Claude."""
 
-        Returns:
-            Parsed JSON object or fallback value
-        """
-        text = response.content[0].text.strip()
-
-        # Simple, deterministic parsing logic
-        def parse_json(content: str):
-            """Clean parser: strip markdown code blocks and parse JSON."""
-            cleaned = content.strip()
-            if cleaned.startswith("```"):
-                # Extract content between first pair of ``` markers
-                parts = cleaned.split("```")
-                if len(parts) >= 3:
-                    cleaned = parts[1]
-                    # Remove language identifier if present
-                    if "\n" in cleaned:
-                        cleaned = cleaned.split("\n", 1)[1]
-            return json.loads(cleaned.strip())
-
-        # First attempt
+    def __init__(self, model: str, api_key: str):
         try:
-            result = parse_json(text)
-            logger.debug("JSON parsed successfully on first attempt")
-            return result
-        except json.JSONDecodeError as e:
-            logger.warning(f"JSON parse failed: {e}")
+            import anthropic
+        except ImportError as exc:
+            raise ImportError(
+                "anthropic package not installed. Install with: pip install anthropic"
+            ) from exc
 
-            # Ask LLM to fix its own response
-            retry_prompt = f"""Your previous response could not be parsed as JSON. Here's the error:
+        logger.info(f"Initializing Anthropic client with model: {model}")
+        self.model = model
+        self.client = anthropic.Anthropic(api_key=api_key)
+        logger.info("Anthropic client initialized successfully")
 
-Error: {e}
+    def send_prompt(self, prompt: str, max_tokens: int) -> str:
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
 
-Here's the parser code that's trying to read your response:
-```python
-def parse_json(content: str):
-    cleaned = content.strip()
-    if cleaned.startswith("```"):
-        parts = cleaned.split("```")
-        if len(parts) >= 3:
-            cleaned = parts[1]
-            if "\\n" in cleaned:
-                cleaned = cleaned.split("\\n", 1)[1]
-    return json.loads(cleaned.strip())
-```
 
-Your original response was:
-```
-{text[:500]}
-```
+class _OpenAIProvider:
+    """Provider strategy for OpenAI models."""
 
-Please provide ONLY valid JSON with no additional text, explanations, or markdown formatting."""
+    RESPONSES_MODELS_PREFIXES = ("gpt-5", "o4")
 
-            try:
-                logger.debug("Requesting LLM to fix JSON formatting")
-                retry_response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=1000,
-                    messages=[{"role": "user", "content": retry_prompt}],
-                )
-                retry_text = retry_response.content[0].text.strip()
-                result = parse_json(retry_text)
-                logger.info("JSON parsed successfully after retry")
-                return result
-            except Exception as retry_error:
-                logger.error(f"Retry also failed: {retry_error}. Using fallback.")
-                return fallback
+    def __init__(self, model: str, api_key: str):
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise ImportError(
+                "openai package not installed. Install with: pip install openai"
+            ) from exc
+
+        logger.info(f"Initializing OpenAI client with model: {model}")
+        self.model = model
+        self.client = OpenAI(api_key=api_key)
+        self._use_responses_api = model.startswith(self.RESPONSES_MODELS_PREFIXES)
+        logger.info("OpenAI client initialized successfully")
+
+    def send_prompt(self, prompt: str, max_tokens: int) -> str:
+        if self._use_responses_api:
+            response = self.client.responses.create(
+                model=self.model,
+                input=prompt,
+                max_output_tokens=max_tokens,
+            )
+            return self._extract_response_text(response)
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        content = response.choices[0].message.content
+        if isinstance(content, list):
+            # Responses can return structured data; join textual parts.
+            return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+        return content or ""
+
+    @staticmethod
+    def _extract_response_text(response) -> str:
+        output_text = getattr(response, "output_text", None)
+        if output_text:
+            return output_text
+
+        text_segments: List[str] = []
+        output = getattr(response, "output", []) or []
+        for item in output:
+            content_list = getattr(item, "content", []) or []
+            for chunk in content_list:
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "output_text":
+                        text_segments.append(chunk.get("text", ""))
+                else:
+                    if getattr(chunk, "type", None) == "output_text":
+                        text_segments.append(getattr(chunk, "text", ""))
+        return "".join(text_segments)

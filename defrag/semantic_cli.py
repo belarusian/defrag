@@ -4,6 +4,7 @@ Semantic CLI commands for defrag tool.
 Commands for LLM-based semantic analysis.
 """
 
+import glob
 import os
 
 from .analyzer import SemanticAnalyzer
@@ -28,26 +29,43 @@ def cmd_semantic_analyze(args):
     """Run full semantic analysis on codebase and documentation."""
     print("=== Semantic Analysis ===")
     print(f"Root: {args.root}")
-    print(f"Model: {args.model}")
+    provider = (args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR, "anthropic")).lower()
+    default_model = LLMClient.DEFAULT_MODELS.get(provider, "unknown")
+    print(f"Provider: {provider}")
+    if args.model:
+        print(f"Model: {args.model}")
+    else:
+        print(f"Model: {default_model} (default)")
     print()
 
     # Initialize progress tracker
     progress = ProgressTracker(args.root)
     progress.log(f"Starting semantic analysis on {args.root}")
-    progress.log(f"Using model: {args.model}")
+    progress.log(f"Using provider: {provider}")
+    model_label = args.model or default_model
+    progress.log(f"Using model: {model_label}")
     print(f"Progress log: {progress.log_path}")
     print()
 
     # Initialize
     try:
         progress.log("Initializing LLM client...")
-        llm = LLMClient(model=args.model, root_dir=args.root)
+        llm = LLMClient(
+            model=args.model,
+            provider=provider,
+            api_key=args.api_key,
+            root_dir=args.root,
+        )
         analyzer = SemanticAnalyzer(llm, root_dir=args.root)
         progress.log("LLM client ready")
     except Exception as e:
         progress.log(f"ERROR: {e}")
         print(f"Error initializing LLM client: {e}")
-        print("\nHint: Set ANTHROPIC_API_KEY environment variable")
+        key_env = LLMClient.PROVIDER_KEY_ENVS.get(provider)
+        if key_env:
+            print(f"\nHint: Set {key_env} environment variable or pass --api-key")
+        else:
+            print("\nHint: Check provider configuration and API key settings")
         return 1
 
     # Step 1: Analyze documentation
@@ -73,9 +91,6 @@ def cmd_semantic_analyze(args):
     progress.log("Scanning for code files...")
     print("[2/4] Analyzing code...")
     # For now, scan Python files in specific directories
-    import os
-    import glob
-
     code_paths = []
     for pattern in ["ingest/**/*.py", "tools/**/*.py"]:
         full_pattern = os.path.join(args.root, pattern)
@@ -345,7 +360,17 @@ def add_semantic_commands(subparsers, parent_parser):
         parents=[parent_parser],
     )
     parser_analyze.add_argument(
-        "--model", default="claude-sonnet-4-5-20250929", help="LLM model to use"
+        "--provider",
+        choices=sorted(LLMClient.SUPPORTED_PROVIDERS),
+        help="LLM provider to use (default: env DEFRAG_LLM_PROVIDER or anthropic)",
+    )
+    parser_analyze.add_argument(
+        "--model",
+        help="LLM model to use (defaults per provider)",
+    )
+    parser_analyze.add_argument(
+        "--api-key",
+        help="Override API key for selected provider",
     )
     parser_analyze.add_argument(
         "--output", default=DEFAULT_SEMANTIC_INDEX, help="Output file for semantic index"

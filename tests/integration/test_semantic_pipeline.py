@@ -2,7 +2,7 @@
 Integration tests for semantic analysis pipeline.
 
 Tests the full end-to-end workflow with real LLM API calls.
-Requires ANTHROPIC_API_KEY environment variable.
+Requires ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.
 """
 
 import os
@@ -30,9 +30,6 @@ def fixture_codebase():
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(
-    not os.getenv("ANTHROPIC_API_KEY"), reason="Requires ANTHROPIC_API_KEY for real API calls"
-)
 class TestSemanticPipeline:
     """Integration tests using real LLM API."""
 

@@ -78,7 +78,11 @@ class IntelligentScanner:
                 filename = entry.name
                 if filename in decisions.get("scan_files", []):
                     rel_file = str(entry.relative_to(self.root_dir))
-                    category = decisions.get("file_categories", {}).get(filename, "other")
+                    raw_category = decisions.get("file_categories", {}).get(filename, "other")
+                    # Normalize category to lowercase and ensure it's valid
+                    category = str(raw_category).lower()
+                    if category not in self.files_to_scan:
+                        category = "other"  # Default to "other" for unknown categories
                     self.files_to_scan[category].append(rel_file)
                     if verbose:
                         print(f"  + {rel_file} -> {category}")

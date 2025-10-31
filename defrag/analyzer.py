@@ -208,7 +208,7 @@ class SemanticAnalyzer:
                     reasoning=match["reasoning"],
                     suggested_link=suggested_link,
                     context_needed=match.get("context_needed"),
-                    iterations=1,
+                    iterations=match.get("iterations", 1),
                 )
 
                 self.index.add_match(concept_match)

@@ -11,6 +11,7 @@ import re
 from typing import Dict, List, Optional
 
 from .llm import LLMClient
+from .refiner import IterativeRefiner
 from .semantic import (
     Concept,
     ConceptMatch,
@@ -18,7 +19,6 @@ from .semantic import (
     extract_markdown_sections,
     make_concept_id,
 )
-from .validator import validate_code_ref
 
 
 class SemanticAnalyzer:
@@ -41,7 +41,7 @@ class SemanticAnalyzer:
             llm_client: LLM client for semantic analysis
             root_dir: Root directory of codebase
         """
-        self.llm = llm_client or LLMClient()
+        self.llm = llm_client or LLMClient(root_dir=root_dir)
         self.root_dir = root_dir
         self.index = SemanticIndex()
 
@@ -150,18 +150,21 @@ class SemanticAnalyzer:
                 self.analyze_python_file(code_path, verbose)
             # Add support for other languages here (TypeScript, etc.)
 
-    def match_all_concepts(self, verbose: bool = False) -> None:
+    def match_all_concepts(self, verbose: bool = False, max_iterations: int = 1) -> None:
         """
         Match code concepts to documentation concepts.
 
         Args:
             verbose: Print progress
+            max_iterations: Max refinement iterations (0 to disable auto-refinement)
         """
         code_concepts = self.index.get_code_concepts()
         doc_concepts = self.index.get_doc_concepts()
 
         if verbose:
-            print(f"\nMatching {len(code_concepts)} code concepts to {len(doc_concepts)} doc concepts...")
+            print(
+                f"\nMatching {len(code_concepts)} code concepts to {len(doc_concepts)} doc concepts..."
+            )
 
         # Prepare doc concepts for matching
         doc_concept_list = [
@@ -172,13 +175,14 @@ class SemanticAnalyzer:
             if verbose:
                 print(f"\nMatching: {code_concept.source}:{code_concept.location}")
 
-            # Get matches from LLM
+            # Get matches from LLM (with automatic refinement)
             matches = self.llm.match_concepts(
                 {
                     "description": code_concept.description,
                     "keywords": code_concept.keywords,
                 },
                 doc_concept_list,
+                max_iterations=max_iterations,
             )
 
             for match in matches:
@@ -188,20 +192,24 @@ class SemanticAnalyzer:
 
                 doc_concept = doc_concepts[doc_index]
 
+                # Suggest physical link
+                suggested_link = None
+                if code_concept.line_range:
+                    start, end = code_concept.line_range
+                    if start == end:
+                        suggested_link = f"{code_concept.source}:{start}"
+                    else:
+                        suggested_link = f"{code_concept.source}:{start}-{end}"
+
                 concept_match = ConceptMatch(
                     code_concept_id=code_concept.id,
                     doc_concept_id=doc_concept.id,
                     confidence=match["confidence"],
                     reasoning=match["reasoning"],
+                    suggested_link=suggested_link,
+                    context_needed=match.get("context_needed"),
+                    iterations=match.get("iterations", 1),
                 )
-
-                # Suggest physical link
-                if code_concept.line_range:
-                    start, end = code_concept.line_range
-                    if start == end:
-                        concept_match.suggested_link = f"{code_concept.source}:{start}"
-                    else:
-                        concept_match.suggested_link = f"{code_concept.source}:{start}-{end}"
 
                 self.index.add_match(concept_match)
 
@@ -240,16 +248,13 @@ class SemanticAnalyzer:
                 # Check if doc references this code file
                 if code_concept.source in doc_content:
                     # Extract specific line references
-                    pattern = re.compile(
-                        rf"{re.escape(code_concept.source)}:(\d+)(?:-(\d+))?"
-                    )
+                    pattern = re.compile(rf"{re.escape(code_concept.source)}:(\d+)(?:-(\d+))?")
                     refs = pattern.findall(doc_content)
 
                     if refs:
                         # Check if any reference is valid
                         for ref_match in refs:
                             start_line = int(ref_match[0])
-                            end_line = int(ref_match[1]) if ref_match[1] else start_line
 
                             # Check if reference is in range of code concept
                             code_start, code_end = code_concept.line_range or (0, 0)
@@ -270,9 +275,33 @@ class SemanticAnalyzer:
             except (IOError, UnicodeDecodeError):
                 pass
 
-    def generate_report(self) -> Dict:
+    def refine_low_confidence_matches(self, max_iterations: int = 3, verbose: bool = False) -> None:
+        """
+        Iteratively refine low-confidence matches by expanding context.
+
+        Args:
+            max_iterations: Maximum refinement iterations per match
+            verbose: Print progress
+        """
+        if verbose:
+            print("\nRefining low-confidence matches...")
+
+        refiner = IterativeRefiner(self.llm, self.root_dir, max_iterations)
+        refined_matches = refiner.refine_matches(self.index.matches, self.index, verbose)
+
+        # Replace matches with refined versions
+        self.index.matches = refined_matches
+
+        if verbose:
+            low_conf_count = sum(1 for m in self.index.matches if m.confidence < 0.7)
+            print(f"\nRefinement complete. {low_conf_count} matches still below 0.7 confidence")
+
+    def generate_report(self, min_confidence: float = 0.7) -> Dict:
         """
         Generate semantic analysis report.
+
+        Args:
+            min_confidence: Minimum confidence to consider a match valid
 
         Returns:
             Dictionary with:
@@ -281,13 +310,14 @@ class SemanticAnalyzer:
             - total_matches: Total concept matches
             - high_confidence_matches: Matches with confidence >= 0.8
             - validated_matches: Matches with valid physical links
-            - unmatched_docs: GC candidates (no semantic matches)
+            - unmatched_docs: GC candidates (no high-confidence semantic matches)
         """
         all_doc_files = {c.source for c in self.index.get_doc_concepts()}
+        # Only count docs with high-confidence matches as "matched"
         matched_doc_files = {
             self.index.get_concept(m.doc_concept_id).source
             for m in self.index.matches
-            if self.index.get_concept(m.doc_concept_id)
+            if m.confidence >= min_confidence and self.index.get_concept(m.doc_concept_id)
         }
         unmatched_docs = all_doc_files - matched_doc_files
 
@@ -306,3 +336,28 @@ class SemanticAnalyzer:
             "unmatched_docs": len(unmatched_docs),
             "gc_candidates": sorted(unmatched_docs),
         }
+
+    def find_undocumented_code(self, min_confidence: float = 0.5) -> List[Concept]:
+        """
+        Find code concepts that have no documentation.
+
+        Identifies code that lacks semantic matches to documentation,
+        which could benefit from auto-generated docs.
+
+        Args:
+            min_confidence: Minimum confidence to consider a match valid
+
+        Returns:
+            List of code Concept objects with no doc matches
+        """
+        code_concepts = self.index.get_code_concepts()
+
+        # Get code concept IDs that have matches
+        matched_code_ids = {
+            m.code_concept_id for m in self.index.matches if m.confidence >= min_confidence
+        }
+
+        # Return code concepts with no matches
+        undocumented = [c for c in code_concepts if c.id not in matched_code_ids]
+
+        return undocumented

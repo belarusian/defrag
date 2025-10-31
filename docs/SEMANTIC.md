@@ -74,7 +74,7 @@ Traditional tools only check #2. We check both.
 
 ```bash
 python -m tools.defrag semantic-analyze \
-  --model claude-3-5-sonnet-20241022 \
+  --model claude-sonnet-4-5-20250929 \
   --output semantic_index.json \
   --verbose
 ```

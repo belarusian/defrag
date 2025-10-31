@@ -8,7 +8,7 @@ import os
 import re
 from typing import List, Optional, Tuple
 
-from .semantic import Concept, ConceptMatch, SemanticIndex
+from .semantic import SemanticIndex
 
 
 def find_section_in_markdown(content: str, section_name: str) -> Optional[Tuple[int, int]]:
@@ -29,7 +29,7 @@ def find_section_in_markdown(content: str, section_name: str) -> Optional[Tuple[
 
     for i, line in enumerate(lines):
         # Check for markdown header
-        match = re.match(r'^(#+)\s+(.+)$', line)
+        match = re.match(r"^(#+)\s+(.+)$", line)
         if match:
             level = len(match.group(1))
             header_text = match.group(2).strip()
@@ -51,10 +51,7 @@ def find_section_in_markdown(content: str, section_name: str) -> Optional[Tuple[
 
 
 def insert_code_reference(
-    content: str,
-    section_name: str,
-    code_ref: str,
-    reasoning: str = None
+    content: str, section_name: str, code_ref: str, reasoning: str = None
 ) -> Tuple[str, bool]:
     """
     Insert code reference into markdown section.
@@ -108,7 +105,7 @@ def fix_document_references(
     semantic_index: SemanticIndex,
     root_dir: str = ".",
     dry_run: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> List[str]:
     """
     Auto-fix missing physical references in a document.
@@ -135,8 +132,7 @@ def fix_document_references(
 
     # Filter for high confidence matches without valid physical links
     fixable = [
-        m for m in matches
-        if m.confidence >= 0.7 and m.physical_link_valid != True and m.suggested_link
+        m for m in matches if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
     ]
 
     if not fixable:
@@ -160,10 +156,7 @@ def fix_document_references(
 
         # Try to insert reference
         new_content, success = insert_code_reference(
-            modified_content,
-            doc_concept.location,
-            match.suggested_link,
-            match.reasoning
+            modified_content, doc_concept.location, match.suggested_link, match.reasoning
         )
 
         if success:
@@ -197,7 +190,7 @@ def fix_all_documents(
     root_dir: str = ".",
     dry_run: bool = False,
     min_confidence: float = 0.7,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> dict:
     """
     Auto-fix all documents with missing references.
@@ -218,7 +211,7 @@ def fix_all_documents(
     # Group matches by doc
     docs_with_matches = set()
     for match in semantic_index.matches:
-        if match.confidence >= min_confidence and match.physical_link_valid != True:
+        if match.confidence >= min_confidence and not match.physical_link_valid:
             doc_concept = semantic_index.get_concept(match.doc_concept_id)
             if doc_concept:
                 docs_with_matches.add(doc_concept.source)
@@ -231,13 +224,7 @@ def fix_all_documents(
         if verbose:
             print(f"Fixing {doc_path}...")
 
-        changes = fix_document_references(
-            doc_path,
-            semantic_index,
-            root_dir,
-            dry_run,
-            verbose
-        )
+        changes = fix_document_references(doc_path, semantic_index, root_dir, dry_run, verbose)
 
         if changes:
             all_changes[doc_path] = changes
@@ -248,11 +235,7 @@ def fix_all_documents(
     return all_changes
 
 
-def preview_fix(
-    doc_path: str,
-    semantic_index: SemanticIndex,
-    root_dir: str = "."
-) -> str:
+def preview_fix(doc_path: str, semantic_index: SemanticIndex, root_dir: str = ".") -> str:
     """
     Preview what would be fixed in a document.
 
@@ -266,8 +249,7 @@ def preview_fix(
     """
     matches = semantic_index.get_matches_for_doc(doc_path)
     fixable = [
-        m for m in matches
-        if m.confidence >= 0.7 and m.physical_link_valid != True and m.suggested_link
+        m for m in matches if m.confidence >= 0.7 and not m.physical_link_valid and m.suggested_link
     ]
 
     if not fixable:

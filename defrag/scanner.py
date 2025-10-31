@@ -16,7 +16,7 @@ from typing import List, Set
 #   path/to/file.py:123-456
 #   `path/to/file.py:123`
 CODE_REF_PATTERN = re.compile(
-    r'`?([a-zA-Z0-9_/\-\.]+\.(py|ts|js|java|go|rs|md)):(\d+)(?:-(\d+))?`?'
+    r"`?([a-zA-Z0-9_/\-\.]+\.(py|ts|js|java|go|rs|md)):(\d+)(?:-(\d+))?`?"
 )
 
 
@@ -159,7 +159,9 @@ def find_code_file(file_path: str, root_dir: str = ".") -> bool:
     return os.path.isfile(full_path)
 
 
-def validate_line_range(file_path: str, start_line: int, end_line: int = None, root_dir: str = ".") -> bool:
+def validate_line_range(
+    file_path: str, start_line: int, end_line: int = None, root_dir: str = "."
+) -> bool:
     """
     Validate that line numbers exist in a file.
 

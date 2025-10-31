@@ -64,6 +64,8 @@ class ConceptMatch:
     reasoning: str  # Why they match
     physical_link_valid: Optional[bool] = None  # Grounding heuristic
     suggested_link: Optional[str] = None  # Recommended physical reference
+    context_needed: Optional[dict] = None  # What additional context LLM needs
+    iterations: int = 1  # Number of analysis iterations
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -74,6 +76,8 @@ class ConceptMatch:
             "reasoning": self.reasoning,
             "physical_link_valid": self.physical_link_valid,
             "suggested_link": self.suggested_link,
+            "context_needed": self.context_needed,
+            "iterations": self.iterations,
         }
 
     @classmethod
@@ -86,6 +90,8 @@ class ConceptMatch:
             reasoning=data["reasoning"],
             physical_link_valid=data.get("physical_link_valid"),
             suggested_link=data.get("suggested_link"),
+            context_needed=data.get("context_needed"),
+            iterations=data.get("iterations", 1),
         )
 
 
@@ -126,7 +132,9 @@ class SemanticIndex:
     def get_matches_for_code(self, code_path: str) -> List[ConceptMatch]:
         """Get all matches for a code file."""
         code_concept_ids = {
-            c.id for c in self.concepts.values() if c.source == code_path and c.source_type == "code"
+            c.id
+            for c in self.concepts.values()
+            if c.source == code_path and c.source_type == "code"
         }
         return [m for m in self.matches if m.code_concept_id in code_concept_ids]
 
@@ -209,7 +217,9 @@ def extract_markdown_sections(md_path: str, root_dir: str = ".") -> List[tuple]:
 
         # Save last section
         if current_section:
-            sections.append((current_section, "".join(current_content).strip(), line_start, len(lines)))
+            sections.append(
+                (current_section, "".join(current_content).strip(), line_start, len(lines))
+            )
 
     except (IOError, UnicodeDecodeError):
         pass

@@ -21,7 +21,7 @@ DEFAULT_SEMANTIC_INDEX = "semantic_index.json"
 
 def _resolve_index_path(index_arg, root_dir):
     """Resolve semantic index path - look in root_dir if using default."""
-    if index_arg == DEFAULT_SEMANTIC_INDEX:
+    if index_arg is None or index_arg == DEFAULT_SEMANTIC_INDEX:
         return os.path.join(root_dir, DEFAULT_SEMANTIC_INDEX)
     return index_arg
 

@@ -199,7 +199,7 @@ Keywords: {', '.join(code_concept['keywords'])}
 Documentation Options:
 {doc_summaries}
 
-For each relevant match, respond with JSON array:
+Respond with JSON array only:
 [
   {{
     "doc_index": 0,
@@ -219,7 +219,8 @@ Rules:
   - file_patterns: Glob patterns for files that would help
   - keywords: Terms to search for
   - reason: What you need to verify
-- Return empty array [] if no good matches"""
+- Return empty array [] if no good matches
+- Do not include any explanation outside the JSON"""
 
         try:
             logger.debug(f"Matching code concept to {len(doc_concepts)} doc concepts")
@@ -238,8 +239,12 @@ Rules:
             text = response.content[0].text.strip()
             logger.debug(f"Raw LLM response text (first 200 chars): {text[:200]}")
             if text.startswith("```"):
-                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-                text = text.rsplit("```", 1)[0].strip()
+                # Extract content between ``` markers
+                text = text.split("```", 2)[1] if text.count("```") >= 2 else text[3:]
+                # Remove language identifier (e.g., "json")
+                if "\n" in text:
+                    text = text.split("\n", 1)[1]
+                text = text.strip()
             logger.debug(f"Cleaned text for JSON parsing: {text[:200]}")
             matches = json.loads(text)
             return matches if isinstance(matches, list) else []

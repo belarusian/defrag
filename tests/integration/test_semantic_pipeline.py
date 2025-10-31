@@ -12,7 +12,6 @@ import shutil
 from pathlib import Path
 
 from defrag.analyzer import SemanticAnalyzer
-from defrag.llm import LLMClient
 
 
 @pytest.fixture
@@ -200,11 +199,8 @@ class TestSemanticPipeline:
                     match.context_needed is None or match.iterations > 1
                 ), "Low confidence match should have no context_needed or multiple iterations"
 
-        # Verify that some matches went through refinement (iterations > 1)
-        # This assumes the test fixtures naturally produce some low-confidence matches
-        refined_matches = [m for m in analyzer.index.matches if m.iterations > 1]
-        # Note: We don't strictly require refined matches since the LLM might be
-        # confident on first try, but if there are any, they should show iteration tracking
+        # Note: We don't strictly require refined matches (iterations > 1) since the LLM
+        # might be confident on first try, but if there are any, they should show iteration tracking
 
     def test_physical_link_validation(self, fixture_codebase):
         """

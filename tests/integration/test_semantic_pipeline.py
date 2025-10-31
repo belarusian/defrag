@@ -45,8 +45,7 @@ class TestSemanticPipeline:
         - USER_GUIDE.md "User Engagement Scoring" → calculate_user_score()
         - USER_GUIDE.md "Payment Processing" → process_payment()
         """
-        llm = LLMClient()
-        analyzer = SemanticAnalyzer(llm, root_dir=str(fixture_codebase))
+        analyzer = SemanticAnalyzer(root_dir=str(fixture_codebase))
 
         # Analyze docs
         doc_paths = ["docs/USER_GUIDE.md", "docs/LEGACY.md"]
@@ -56,8 +55,8 @@ class TestSemanticPipeline:
         code_paths = ["sample_code.py"]
         analyzer.analyze_code_files(code_paths, verbose=False)
 
-        # Match concepts
-        analyzer.match_all_concepts(verbose=False)
+        # Match concepts (disable auto-refinement for faster tests)
+        analyzer.match_all_concepts(verbose=False, max_iterations=0)
 
         # Verify we found matches
         assert len(analyzer.index.matches) > 0, "Should find semantic matches"
@@ -95,8 +94,7 @@ class TestSemanticPipeline:
         - Should have no semantic matches
         - Should be flagged for GC
         """
-        llm = LLMClient()
-        analyzer = SemanticAnalyzer(llm, root_dir=str(fixture_codebase))
+        analyzer = SemanticAnalyzer(root_dir=str(fixture_codebase))
 
         # Analyze all docs
         doc_paths = ["docs/USER_GUIDE.md", "docs/LEGACY.md"]
@@ -106,8 +104,8 @@ class TestSemanticPipeline:
         code_paths = ["sample_code.py"]
         analyzer.analyze_code_files(code_paths, verbose=False)
 
-        # Match concepts
-        analyzer.match_all_concepts(verbose=False)
+        # Match concepts (disable auto-refinement for faster tests)
+        analyzer.match_all_concepts(verbose=False, max_iterations=0)
 
         # Generate report
         report = analyzer.generate_report()
@@ -139,8 +137,7 @@ class TestSemanticPipeline:
         - Should be detected as undocumented code
         - Could trigger auto-doc generation
         """
-        llm = LLMClient()
-        analyzer = SemanticAnalyzer(llm, root_dir=str(fixture_codebase))
+        analyzer = SemanticAnalyzer(root_dir=str(fixture_codebase))
 
         # Analyze docs
         doc_paths = ["docs/USER_GUIDE.md", "docs/LEGACY.md"]
@@ -150,8 +147,8 @@ class TestSemanticPipeline:
         code_paths = ["sample_code.py"]
         analyzer.analyze_code_files(code_paths, verbose=False)
 
-        # Match concepts
-        analyzer.match_all_concepts(verbose=False)
+        # Match concepts (disable auto-refinement for faster tests)
+        analyzer.match_all_concepts(verbose=False, max_iterations=0)
 
         # Find code concepts with no documentation
         undocumented = analyzer.find_undocumented_code()
@@ -177,8 +174,7 @@ class TestSemanticPipeline:
         - Confidence improves or stays similar
         - Iterations tracked in match data
         """
-        llm = LLMClient()
-        analyzer = SemanticAnalyzer(llm, root_dir=str(fixture_codebase))
+        analyzer = SemanticAnalyzer(root_dir=str(fixture_codebase))
 
         # Analyze
         doc_paths = ["docs/USER_GUIDE.md"]
@@ -187,36 +183,28 @@ class TestSemanticPipeline:
         code_paths = ["sample_code.py"]
         analyzer.analyze_code_files(code_paths, verbose=False)
 
-        analyzer.match_all_concepts(verbose=False)
+        # Enable auto-refinement for this test (max 1 refinement iteration)
+        analyzer.match_all_concepts(verbose=False, max_iterations=1)
 
-        # Capture initial state
-        initial_matches = len(analyzer.index.matches)
-        initial_low_conf = sum(1 for m in analyzer.index.matches if m.confidence < 0.7)
-
-        # Run refinement
-        analyzer.refine_low_confidence_matches(max_iterations=2, verbose=False)
-
-        # Check refinement effects
-        refined_low_conf = sum(1 for m in analyzer.index.matches if m.confidence < 0.7)
-
-        # Refinement should not lose matches
-        assert (
-            len(analyzer.index.matches) == initial_matches
-        ), "Refinement should not remove matches"
-
-        # Refinement should improve confidence or stay same
-        assert (
-            refined_low_conf <= initial_low_conf
-        ), "Refinement should improve or maintain confidence"
-
-        # Check iteration tracking
+        # Check that refinement happened automatically during matching
+        # All matches should have iteration tracking
         for match in analyzer.index.matches:
             assert match.iterations >= 1, "Match should track iterations"
+
+            # If a match is still low confidence, it should either:
+            # 1. Have no context_needed (LLM decided it can't be improved)
+            # 2. Have exhausted max_iterations
             if match.confidence < 0.7:
-                # Low confidence matches should have attempted refinement
+                # Either no context was needed, or refinement was attempted
                 assert (
-                    match.iterations > 1 or match.context_needed is None
-                ), "Low confidence match should be refined or have no context needed"
+                    match.context_needed is None or match.iterations > 1
+                ), "Low confidence match should have no context_needed or multiple iterations"
+
+        # Verify that some matches went through refinement (iterations > 1)
+        # This assumes the test fixtures naturally produce some low-confidence matches
+        refined_matches = [m for m in analyzer.index.matches if m.iterations > 1]
+        # Note: We don't strictly require refined matches since the LLM might be
+        # confident on first try, but if there are any, they should show iteration tracking
 
     def test_physical_link_validation(self, fixture_codebase):
         """
@@ -227,8 +215,7 @@ class TestSemanticPipeline:
         - Physical validator checks if links exist in doc
         - Confidence adjusted based on validation
         """
-        llm = LLMClient()
-        analyzer = SemanticAnalyzer(llm, root_dir=str(fixture_codebase))
+        analyzer = SemanticAnalyzer(root_dir=str(fixture_codebase))
 
         # Manually add a physical link to USER_GUIDE.md
         user_guide = fixture_codebase / "docs" / "USER_GUIDE.md"

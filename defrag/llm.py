@@ -26,7 +26,7 @@ class LLMClient:
     MODEL_ENV_VAR = "DEFRAG_LLM_MODEL"
     DEFAULT_MODELS = {
         "anthropic": "claude-sonnet-4-5-20250929",
-        "openai": "gpt-5-mini-2025-08-07",
+        "openai": "gpt-4o",
     }
     PROVIDER_KEY_ENVS = {
         "anthropic": "ANTHROPIC_API_KEY",

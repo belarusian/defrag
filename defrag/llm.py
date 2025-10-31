@@ -167,6 +167,11 @@ Respond with JSON only:
 
         prompt = f"""Match this code concept to relevant documentation sections.
 
+This analysis is used to identify orphaned documentation that should be marked for garbage collection.
+Documentation with NO matches above 0.7 confidence will be flagged for removal from the codebase.
+Be conservative with confidence scores - only use high confidence (>0.7) when you are certain the code
+actually implements what the documentation describes.
+
 Code Concept:
 {code_concept['description']}
 Keywords: {', '.join(code_concept['keywords'])}
@@ -190,10 +195,9 @@ Respond with JSON array only:
 
 Rules:
 - Only include matches with confidence >= 0.5
-- If confidence < 0.7, include context_needed with:
-  - file_patterns: Glob patterns for files that would help
-  - keywords: Terms to search for
-  - reason: What you need to verify
+- If confidence < 0.7, include context_needed with file patterns/keywords that would help verify the match
+- Confidence > 0.7 means "this doc describes this code" (doc stays in codebase)
+- Confidence < 0.7 means uncertain/weak connection (doc may be marked for garbage collection)
 - Return empty array [] if no good matches
 - Do not include any explanation outside the JSON"""
 

@@ -294,9 +294,12 @@ class SemanticAnalyzer:
             low_conf_count = sum(1 for m in self.index.matches if m.confidence < 0.7)
             print(f"\nRefinement complete. {low_conf_count} matches still below 0.7 confidence")
 
-    def generate_report(self) -> Dict:
+    def generate_report(self, min_confidence: float = 0.5) -> Dict:
         """
         Generate semantic analysis report.
+
+        Args:
+            min_confidence: Minimum confidence to consider a match valid
 
         Returns:
             Dictionary with:
@@ -305,13 +308,14 @@ class SemanticAnalyzer:
             - total_matches: Total concept matches
             - high_confidence_matches: Matches with confidence >= 0.8
             - validated_matches: Matches with valid physical links
-            - unmatched_docs: GC candidates (no semantic matches)
+            - unmatched_docs: GC candidates (no high-confidence semantic matches)
         """
         all_doc_files = {c.source for c in self.index.get_doc_concepts()}
+        # Only count docs with high-confidence matches as "matched"
         matched_doc_files = {
             self.index.get_concept(m.doc_concept_id).source
             for m in self.index.matches
-            if self.index.get_concept(m.doc_concept_id)
+            if m.confidence >= min_confidence and self.index.get_concept(m.doc_concept_id)
         }
         unmatched_docs = all_doc_files - matched_doc_files
 

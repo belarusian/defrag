@@ -87,17 +87,20 @@ Respond with JSON only:
         try:
             # Strip markdown code blocks if present
             text = response.content[0].text.strip()
+            logger.debug(f"Raw LLM response text (first 200 chars): {text[:200]}")
             if text.startswith("```"):
                 # Remove ```json or ``` prefix and ``` suffix
                 text = text.split("\n", 1)[1] if "\n" in text else text[3:]
                 text = text.rsplit("```", 1)[0].strip()
+            logger.debug(f"Cleaned text for JSON parsing: {text[:200]}")
             result = json.loads(text)
             return {
                 "description": result.get("description", ""),
                 "keywords": result.get("keywords", []),
             }
-        except (json.JSONDecodeError, IndexError):
+        except (json.JSONDecodeError, IndexError) as e:
             # Fallback
+            logger.warning(f"Failed to parse LLM response as JSON: {e}. Using fallback.")
             return {
                 "description": f"Documentation section: {section_name}",
                 "keywords": [section_name.lower()],
@@ -148,16 +151,19 @@ Respond with JSON only:
         try:
             # Strip markdown code blocks if present
             text = response.content[0].text.strip()
+            logger.debug(f"Raw LLM response text (first 200 chars): {text[:200]}")
             if text.startswith("```"):
                 # Remove ```json or ``` prefix and ``` suffix
                 text = text.split("\n", 1)[1] if "\n" in text else text[3:]
                 text = text.rsplit("```", 1)[0].strip()
+            logger.debug(f"Cleaned text for JSON parsing: {text[:200]}")
             result = json.loads(text)
             return {
                 "description": result.get("description", ""),
                 "keywords": result.get("keywords", []),
             }
-        except (json.JSONDecodeError, IndexError):
+        except (json.JSONDecodeError, IndexError) as e:
+            logger.warning(f"Failed to parse LLM response as JSON: {e}. Using fallback.")
             return {
                 "description": f"Code at {location}",
                 "keywords": [location.lower()],
@@ -230,12 +236,15 @@ Rules:
         try:
             # Strip markdown code blocks if present
             text = response.content[0].text.strip()
+            logger.debug(f"Raw LLM response text (first 200 chars): {text[:200]}")
             if text.startswith("```"):
                 text = text.split("\n", 1)[1] if "\n" in text else text[3:]
                 text = text.rsplit("```", 1)[0].strip()
+            logger.debug(f"Cleaned text for JSON parsing: {text[:200]}")
             matches = json.loads(text)
             return matches if isinstance(matches, list) else []
-        except (json.JSONDecodeError, IndexError):
+        except (json.JSONDecodeError, IndexError) as e:
+            logger.warning(f"Failed to parse match response as JSON: {e}. Returning empty matches.")
             return []
 
     def batch_extract_doc_concepts(self, sections: List[tuple]) -> List[Dict[str, any]]:

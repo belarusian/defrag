@@ -21,7 +21,12 @@ class LLMClient:
     Uses Anthropic Claude API (or can be adapted for other providers).
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-5-20250929", root_dir: str = "."):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "claude-sonnet-4-5-20250929",
+        root_dir: str = ".",
+    ):
         """
         Initialize LLM client.
 
@@ -228,8 +233,11 @@ Respond with JSON only:
         return expanded
 
     def match_concepts(
-        self, code_concept: Dict[str, any], doc_concepts: List[Dict[str, any]],
-        max_iterations: int = 1, _iteration: int = 0
+        self,
+        code_concept: Dict[str, any],
+        doc_concepts: List[Dict[str, any]],
+        max_iterations: int = 1,
+        _iteration: int = 0,
     ) -> List[Dict[str, any]]:
         """
         Match a code concept to relevant documentation concepts.
@@ -260,10 +268,12 @@ Respond with JSON only:
         # Build context section if additional context was provided
         additional_context_section = ""
         if "additional_context" in code_concept and code_concept["additional_context"]:
-            context_summary = "\n".join([
-                f"  - {path}: {len(content)} chars"
-                for path, content in list(code_concept["additional_context"].items())[:5]
-            ])
+            context_summary = "\n".join(
+                [
+                    f"  - {path}: {len(content)} chars"
+                    for path, content in list(code_concept["additional_context"].items())[:5]
+                ]
+            )
             additional_context_section = f"""
 
 Additional Context (from previous iteration):
@@ -329,12 +339,8 @@ Rules:
 
         # Check if we should perform iterative refinement
         # Only refine if: we have iterations left, and any match needs refinement
-        should_refine = (
-            _iteration < max_iterations and
-            any(
-                m.get("confidence", 1.0) < 0.7 and m.get("context_needed")
-                for m in matches
-            )
+        should_refine = _iteration < max_iterations and any(
+            m.get("confidence", 1.0) < 0.7 and m.get("context_needed") for m in matches
         )
 
         if not should_refine:
@@ -378,7 +384,7 @@ Rules:
                     enriched_code_concept,
                     [doc_concepts[doc_index]],
                     max_iterations=max_iterations,
-                    _iteration=_iteration + 1
+                    _iteration=_iteration + 1,
                 )
 
                 if refined and len(refined) > 0:

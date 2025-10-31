@@ -75,9 +75,10 @@ class IntelligentScanner:
         # Process files
         for entry in entries:
             if entry.is_file():
-                rel_file = str(entry.relative_to(self.root_dir))
-                if rel_file in decisions.get("scan_files", []):
-                    category = decisions.get("file_categories", {}).get(rel_file, "other")
+                filename = entry.name
+                if filename in decisions.get("scan_files", []):
+                    rel_file = str(entry.relative_to(self.root_dir))
+                    category = decisions.get("file_categories", {}).get(filename, "other")
                     self.files_to_scan[category].append(rel_file)
                     if verbose:
                         print(f"  + {rel_file} -> {category}")

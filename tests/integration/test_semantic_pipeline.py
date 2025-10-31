@@ -234,9 +234,9 @@ class TestSemanticPipeline:
         user_guide = fixture_codebase / "docs" / "USER_GUIDE.md"
         content = user_guide.read_text()
 
-        # Add reference to payment function
+        # Add reference to payment function (lines 44-73)
         modified = content.replace(
-            "Invalid amounts", "See `sample_code.py:42-67` for implementation.\n\nInvalid amounts"
+            "Invalid amounts", "See `sample_code.py:44-73` for implementation.\n\nInvalid amounts"
         )
         user_guide.write_text(modified)
 

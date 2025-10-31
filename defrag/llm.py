@@ -85,10 +85,13 @@ Respond with JSON only:
             raise
 
         # Parse response with self-correction
-        return self._parse_json_with_retry(response, {
-            "description": f"Documentation section: {section_name}",
-            "keywords": [section_name.lower()],
-        })
+        return self._parse_json_with_retry(
+            response,
+            {
+                "description": f"Documentation section: {section_name}",
+                "keywords": [section_name.lower()],
+            },
+        )
 
     def extract_code_concept(
         self, file_path: str, location: str, code_snippet: str
@@ -133,10 +136,13 @@ Respond with JSON only:
             raise
 
         # Parse response with self-correction
-        return self._parse_json_with_retry(response, {
-            "description": f"Code at {location}",
-            "keywords": [location.lower()],
-        })
+        return self._parse_json_with_retry(
+            response,
+            {
+                "description": f"Code at {location}",
+                "keywords": [location.lower()],
+            },
+        )
 
     def match_concepts(
         self, code_concept: Dict[str, any], doc_concepts: List[Dict[str, any]]

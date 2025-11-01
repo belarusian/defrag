@@ -236,6 +236,20 @@ def _rewrite_sections(
                 print("      Section rewrite failed safety checks; skipping")
             continue
 
+        missing_refs = [
+            match["code_reference"]
+            for match in section_matches
+            if match["code_reference"] not in cleaned
+        ]
+        if missing_refs:
+            if verbose:
+                print(
+                    "      Section rewrite missing references: "
+                    + ", ".join(missing_refs)
+                    + "; skipping"
+                )
+            continue
+
         new_lines = lines[:start_line] + cleaned.split("\n") + lines[end_line + 1 :]
         updated_content = "\n".join(new_lines)
 

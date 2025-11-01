@@ -4,7 +4,6 @@ Semantic CLI commands for defrag tool.
 Commands for LLM-based semantic analysis.
 """
 
-import glob
 import os
 
 from .analyzer import SemanticAnalyzer
@@ -13,6 +12,7 @@ from .llm import LLMClient
 from .progress import ProgressTracker
 from .scanner import scan_documentation
 from .semantic import SemanticIndex
+from .intelligent_scanner import scan_intelligently
 
 
 DEFAULT_SEMANTIC_INDEX = "semantic_index.json"
@@ -20,7 +20,7 @@ DEFAULT_SEMANTIC_INDEX = "semantic_index.json"
 
 def _resolve_index_path(index_arg, root_dir):
     """Resolve semantic index path - look in root_dir if using default."""
-    if index_arg == DEFAULT_SEMANTIC_INDEX:
+    if index_arg is None or index_arg == DEFAULT_SEMANTIC_INDEX:
         return os.path.join(root_dir, DEFAULT_SEMANTIC_INDEX)
     return index_arg
 
@@ -86,17 +86,30 @@ def cmd_semantic_analyze(args):
     progress.log(f"Extracted {doc_concept_count} doc concepts")
     print(f"  Extracted {doc_concept_count} doc concepts\n")
 
-    # Step 2: Analyze code
-    progress.section("Step 2: Code Analysis")
-    progress.log("Scanning for code files...")
-    print("[2/4] Analyzing code...")
-    # For now, scan Python files in specific directories
-    code_paths = []
-    for pattern in ["ingest/**/*.py", "tools/**/*.py"]:
-        full_pattern = os.path.join(args.root, pattern)
-        code_paths.extend(
-            [os.path.relpath(p, args.root) for p in glob.glob(full_pattern, recursive=True)]
-        )
+    # Step 2: Intelligently discover and analyze code
+    progress.section("Step 2: Intelligent Code Discovery")
+    progress.log("Using LLM to intelligently discover files...")
+    print("[2/4] Discovering code files intelligently...")
+
+    # Use intelligent scanner to discover files
+    discovered_files = scan_intelligently(llm, args.root, verbose=args.verbose)
+
+    # Get code files to analyze
+    code_paths = discovered_files.get("code", [])
+
+    # Also show what was discovered
+    if args.verbose:
+        print("\nDiscovered files by category:")
+        for category, files in discovered_files.items():
+            if files:
+                print(f"  {category}: {len(files)} files")
+                if len(files) <= 5:
+                    for f in files:
+                        print(f"    - {f}")
+                else:
+                    for f in files[:3]:
+                        print(f"    - {f}")
+                    print(f"    ... and {len(files) - 3} more")
 
     progress.log(f"Found {len(code_paths)} code files")
     if args.limit_code:

@@ -9,7 +9,7 @@ import json
 import logging
 import os
 import subprocess
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -92,91 +92,285 @@ class LLMClient:
         """Send prompt to provider and return raw text response."""
         return self._provider.send_prompt(prompt, max_tokens)
 
-    def _request_json(self, prompt: str, max_tokens: int, fallback, log_context: str):
-        """Send prompt, parse JSON, and handle logging."""
+    def _request_json(
+        self, prompt: str, max_tokens: int, log_context: str, validator, schema_retry_builder
+    ):
+        """Send prompt, validate structured JSON, and retry once if needed."""
+        logger.debug(log_context)
+        raw = self._send_prompt(prompt, max_tokens=max_tokens)
+        logger.debug("%s - API call succeeded", log_context)
+
         try:
-            logger.debug(log_context)
-            raw = self._send_prompt(prompt, max_tokens=max_tokens)
-            logger.debug(f"{log_context} - API call succeeded")
-        except Exception as e:
-            logger.error(f"{log_context} failed: {type(e).__name__}: {e}")
-            raise
+            parsed = self._parse_json_content(raw)
+        except ValueError as parse_error:
+            logger.warning("%s - JSON parse failed: %s", log_context, parse_error)
+            retry_prompt = self._build_parse_retry_prompt(parse_error, raw)
+            logger.debug("Retrying with parse correction prompt: %s", retry_prompt[:500])
+            raw_retry = self._send_prompt(retry_prompt, max_tokens=max_tokens)
+            logger.debug("Parse retry raw response: %s", raw_retry[:500])
+            parsed = self._parse_json_content(raw_retry)
+            # Update raw to the successfully parsed response for potential schema retry
+            raw = raw_retry
 
-        return self._parse_json_with_retry(raw, fallback, max_tokens=max_tokens)
+        normalized, issues = validator(parsed)
 
-    def _parse_json_with_retry(self, raw_text: str, fallback, max_tokens: int = 1000):
-        """
-        Parse JSON from LLM response with self-correction retry.
+        if issues:
+            logger.warning("%s - response missing required fields: %s", log_context, issues)
+            retry_prompt = schema_retry_builder(parsed, issues, raw)
+            logger.debug("Retrying with schema correction prompt: %s", retry_prompt[:500])
+            raw_retry = self._send_prompt(retry_prompt, max_tokens=max_tokens)
+            logger.debug("Schema retry raw response: %s", raw_retry[:500])
+            parsed_retry = self._parse_json_content(raw_retry)
+            normalized, issues = validator(parsed_retry)
+            if issues:
+                raise ValueError(
+                    "%s - invalid response after retry: %s"
+                    % (
+                        log_context,
+                        "; ".join(f"entry {issue['index']}: {issue['error']}" for issue in issues),
+                    )
+                )
 
-        Args:
-            raw_text: Response text from provider
-            fallback: Value to return if parsing fails after retry
+        return normalized
 
-        Returns:
-            Parsed JSON object or fallback value
-        """
+    def _parse_json_content(self, raw_text: str) -> any:
+        """Parse JSON text, allowing for markdown fences."""
         text = (raw_text or "").strip()
-
         if not text:
-            logger.warning("Empty response from LLM, using fallback")
-            return fallback
+            raise ValueError("empty response")
 
-        # Simple, deterministic parsing logic
-        def parse_json(content: str):
-            """Clean parser: strip markdown code blocks and parse JSON."""
-            cleaned = content.strip()
-            if cleaned.startswith("```"):
-                # Extract content between first pair of ``` markers
-                parts = cleaned.split("```")
-                if len(parts) >= 3:
-                    cleaned = parts[1]
-                    # Remove language identifier if present
-                    if "\n" in cleaned:
-                        cleaned = cleaned.split("\n", 1)[1]
-            return json.loads(cleaned.strip())
+        cleaned = text
+        if cleaned.startswith("```"):
+            parts = cleaned.split("```")
+            if len(parts) >= 3:
+                cleaned = parts[1]
+                if "\n" in cleaned:
+                    cleaned = cleaned.split("\n", 1)[1]
 
-        # First attempt
+        cleaned = cleaned.strip()
+        if not cleaned:
+            raise ValueError("empty response after stripping code fences")
+
         try:
-            result = parse_json(text)
-            logger.debug("JSON parsed successfully on first attempt")
-            return result
-        except json.JSONDecodeError as e:
-            logger.warning(f"JSON parse failed: {e}")
+            return json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"JSON decode error: {exc}") from exc
 
-            # Ask LLM to fix its own response
-            retry_prompt = f"""Your previous response could not be parsed as JSON. Here's the error:
+    @staticmethod
+    def _build_parse_retry_prompt(error: Exception, original_raw: str) -> str:
+        """Build prompt instructing the model to return valid JSON."""
+        return f"""Your previous response could not be parsed as JSON. Here's the error:
 
-Error: {e}
-
-Here's the parser code that's trying to read your response:
-```python
-def parse_json(content: str):
-    cleaned = content.strip()
-    if cleaned.startswith("```"):
-        parts = cleaned.split("```")
-        if len(parts) >= 3:
-            cleaned = parts[1]
-            if "\\n" in cleaned:
-                cleaned = cleaned.split("\\n", 1)[1]
-    return json.loads(cleaned.strip())
-```
+Error: {error}
 
 Your original response was:
 ```
-{text[:500]}
+{original_raw[:1000]}
 ```
 
-Please provide ONLY valid JSON with no additional text, explanations, or markdown formatting."""
+Please respond with valid JSON only, with no additional text or markdown."""
 
+    def _parse_json_with_retry(self, raw_text: str, fallback: any):
+        """
+        Backwards compatibility helper used by tests.
+
+        Attempts to parse JSON and returns fallback if parsing fails.
+        """
+        try:
+            return self._parse_json_content(raw_text)
+        except ValueError as exc:
+            logger.warning("Failed to parse JSON response: %s", exc)
+            return fallback
+
+    def _validate_doc_response(
+        self, data: any, section_name: str
+    ) -> Tuple[Dict[str, any], List[Dict[str, str]]]:
+        issues: List[Dict[str, str]] = []
+        if not isinstance(data, dict):
+            return {}, [{"index": 0, "error": "response is not an object"}]
+
+        description = data.get("description")
+        if not isinstance(description, str) or not description.strip():
+            issues.append({"index": 0, "error": "description missing or empty"})
+
+        keywords = data.get("keywords")
+        normalized_keywords: List[str] = []
+        if isinstance(keywords, list):
+            for idx, keyword in enumerate(keywords):
+                if isinstance(keyword, str) and keyword.strip():
+                    normalized_keywords.append(keyword.strip())
+                else:
+                    issues.append({"index": idx, "error": "keyword missing or empty"})
+        else:
+            issues.append({"index": 0, "error": "keywords missing or not a list"})
+
+        normalized = {
+            "description": description.strip() if isinstance(description, str) else "",
+            "keywords": normalized_keywords,
+        }
+
+        if not normalized_keywords:
+            issues.append({"index": 0, "error": "keywords list empty"})
+
+        return normalized, issues
+
+    @staticmethod
+    def _build_doc_retry_prompt(
+        section_name: str, issues: List[Dict[str, str]], original_raw: str
+    ) -> str:
+        """Prompt the model to fix doc concept schema violations."""
+        issues_text = (
+            "\n".join(f"- {issue['error']}" for issue in issues) or "- (no details captured)"
+        )
+        return (
+            "Your previous JSON response for the documentation section "
+            f"'{section_name}' is invalid.\n"
+            "Problems detected:\n"
+            f"{issues_text}\n\n"
+            "Original response:\n"
+            "```\n"
+            f"{original_raw[:1000]}\n"
+            "```\n\n"
+            "Please return a JSON object with:\n"
+            '- "description": non-empty string summarizing the section\n'
+            '- "keywords": list of non-empty strings\n\n'
+            "Respond with JSON only."
+        )
+
+    def _validate_code_response(
+        self, data: any, location: str
+    ) -> Tuple[Dict[str, any], List[Dict[str, str]]]:
+        issues: List[Dict[str, str]] = []
+        if not isinstance(data, dict):
+            return {}, [{"index": 0, "error": "response is not an object"}]
+
+        description = data.get("description")
+        if not isinstance(description, str) or not description.strip():
+            issues.append({"index": 0, "error": "description missing or empty"})
+
+        keywords = data.get("keywords")
+        normalized_keywords: List[str] = []
+        if isinstance(keywords, list):
+            for idx, keyword in enumerate(keywords):
+                if isinstance(keyword, str) and keyword.strip():
+                    normalized_keywords.append(keyword.strip())
+                else:
+                    issues.append({"index": idx, "error": "keyword missing or empty"})
+        else:
+            issues.append({"index": 0, "error": "keywords missing or not a list"})
+
+        normalized = {
+            "description": description.strip() if isinstance(description, str) else "",
+            "keywords": normalized_keywords,
+        }
+
+        if not normalized_keywords:
+            issues.append({"index": 0, "error": "keywords list empty"})
+
+        return normalized, issues
+
+    @staticmethod
+    def _build_code_retry_prompt(
+        location: str, issues: List[Dict[str, str]], original_raw: str
+    ) -> str:
+        """Prompt the model to fix code concept schema violations."""
+        issues_text = (
+            "\n".join(f"- {issue['error']}" for issue in issues) or "- (no details captured)"
+        )
+        return (
+            "Your previous JSON response for the code element "
+            f"'{location}' is invalid.\n"
+            "Problems detected:\n"
+            f"{issues_text}\n\n"
+            "Original response:\n"
+            "```\n"
+            f"{original_raw[:1000]}\n"
+            "```\n\n"
+            "Please return a JSON object with:\n"
+            '- "description": non-empty string summarizing the code\n'
+            '- "keywords": list of non-empty strings\n\n'
+            "Respond with JSON only."
+        )
+
+    def _validate_match_response(
+        self, entries: any, doc_count: int, iteration: int
+    ) -> Tuple[List[Dict[str, any]], List[Dict[str, any]]]:
+        if not isinstance(entries, list):
+            return [], [{"index": 0, "error": "response is not a list"}]
+
+        normalized: List[Dict[str, any]] = []
+        issues: List[Dict[str, any]] = []
+
+        for idx, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                issues.append({"index": idx, "error": "entry is not an object"})
+                continue
+
+            errors = []
+            doc_index = entry.get("doc_index")
+            if not isinstance(doc_index, int):
+                errors.append("doc_index missing or not integer")
+            elif doc_index < 0 or doc_index >= doc_count:
+                errors.append("doc_index out of range")
+
+            confidence = entry.get("confidence")
             try:
-                logger.debug("Requesting LLM to fix JSON formatting")
-                retry_raw = self._send_prompt(retry_prompt, max_tokens=max_tokens)
-                result = parse_json(retry_raw.strip())
-                logger.info("JSON parsed successfully after retry")
-                return result
-            except Exception as retry_error:
-                logger.error(f"Retry also failed: {retry_error}. Using fallback.")
-                return fallback
+                confidence_value = float(confidence)
+            except (TypeError, ValueError):
+                errors.append("confidence missing or not numeric")
+                confidence_value = 0.0
+
+            reasoning = entry.get("reasoning")
+            if not isinstance(reasoning, str) or not reasoning.strip():
+                errors.append("reasoning missing or empty")
+
+            if errors:
+                issues.append({"index": idx, "error": ", ".join(errors)})
+                continue
+
+            normalized.append(
+                {
+                    "doc_index": doc_index,
+                    "confidence": confidence_value,
+                    "reasoning": reasoning.strip(),
+                    "context_needed": entry.get("context_needed"),
+                    "iterations": entry.get("iterations", iteration + 1),
+                }
+            )
+
+        return normalized, issues
+
+    @staticmethod
+    def _build_match_retry_prompt(
+        doc_concepts: List[Dict[str, any]], issues: List[Dict[str, any]], original_raw: str
+    ) -> str:
+        """Build prompt instructing the model to correct malformed match responses."""
+        issues_text = (
+            "\n".join(f"- Entry {issue['index']}: {issue['error']}" for issue in issues)
+            or "- (no details captured)"
+        )
+        doc_context = (
+            "\n".join(f"{idx}. {doc['description']}" for idx, doc in enumerate(doc_concepts))
+            or "No documentation concepts available."
+        )
+        return (
+            "Your previous JSON response listing matches between the code concept and documentation sections is invalid.\n"
+            "Problems detected:\n"
+            f"{issues_text}\n\n"
+            "Original response:\n"
+            "```\n"
+            f"{original_raw[:1000]}\n"
+            "```\n\n"
+            "You must respond with a JSON array where each object includes:\n"
+            '- "doc_index" (integer index into the documentation list)\n'
+            '- "confidence" (numeric score between 0 and 1)\n'
+            '- "reasoning" (short explanation of why they match)\n'
+            '- "context_needed" (optional object)\n'
+            '- "iterations" (optional integer)\n\n'
+            "Documentation options for reference:\n"
+            f"{doc_context}\n\n"
+            "Please respond with the corrected JSON array only."
+        )
 
     def extract_doc_concept(self, section_name: str, content: str) -> Dict[str, any]:
         """
@@ -204,15 +398,14 @@ Respond with JSON only:
   "keywords": ["key", "terms", "list"]
 }}"""
 
-        fallback = {
-            "description": f"Documentation section: {section_name}",
-            "keywords": [section_name.lower()],
-        }
         return self._request_json(
             prompt,
             max_tokens=500,
-            fallback=fallback,
-            log_context=(f"Extracting doc concept for section: {section_name}"),
+            log_context=f"Extracting doc concept for section: {section_name}",
+            validator=lambda data: self._validate_doc_response(data, section_name),
+            schema_retry_builder=lambda parsed, issues, raw: self._build_doc_retry_prompt(
+                section_name, issues, raw
+            ),
         )
 
     def extract_code_concept(
@@ -245,15 +438,14 @@ Respond with JSON only:
   "keywords": ["key", "concepts", "list"]
 }}"""
 
-        fallback = {
-            "description": f"Code at {location}",
-            "keywords": [location.lower()],
-        }
         return self._request_json(
             prompt,
             max_tokens=500,
-            fallback=fallback,
-            log_context=(f"Extracting code concept for {file_path}:{location}"),
+            log_context=f"Extracting code concept for {file_path}:{location}",
+            validator=lambda data: self._validate_code_response(data, location),
+            schema_retry_builder=lambda parsed, issues, raw: self._build_code_retry_prompt(
+                location, issues, raw
+            ),
         )
 
     def _expand_context(self, context_needed: dict, max_files: int = 5) -> Dict[str, str]:
@@ -420,21 +612,17 @@ Rules:
 - Return empty array [] if no good matches
 - Do not include any explanation outside the JSON"""
 
-        try:
-            logger.debug(f"Matching code concept to {len(doc_concepts)} doc concepts")
-            raw = self._send_prompt(prompt, max_tokens=1000)
-            logger.debug("Concept matching API call succeeded")
-        except Exception as e:
-            logger.error(f"Concept matching failed: {type(e).__name__}: {e}")
-            raise
-
-        # Parse response with self-correction
-        result = self._parse_json_with_retry(raw, fallback=[], max_tokens=1000)
-        matches = result if isinstance(result, list) else []
-
-        # Add iteration count to matches
-        for match in matches:
-            match["iterations"] = _iteration + 1
+        matches = self._request_json(
+            prompt,
+            max_tokens=1000,
+            log_context=f"Matching code concept '{code_concept['description']}'",
+            validator=lambda data: self._validate_match_response(
+                data, len(doc_concepts), _iteration
+            ),
+            schema_retry_builder=lambda parsed, issues, original_raw: self._build_match_retry_prompt(
+                doc_concepts, issues, original_raw
+            ),
+        )
 
         # Check if we should perform iterative refinement
         # Only refine if: we have iterations left, and any match needs refinement
@@ -498,6 +686,85 @@ Rules:
                 refined_matches.append(match)
 
         return refined_matches
+
+    def _validate_matches(
+        self,
+        entries: List[Dict[str, any]],
+        doc_count: int,
+        iteration: int,
+    ) -> Tuple[List[Dict[str, any]], List[Dict[str, any]]]:
+        """Validate and normalize raw match entries."""
+        normalized: List[Dict[str, any]] = []
+        issues: List[Dict[str, any]] = []
+
+        for idx, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                issues.append({"index": idx, "error": "entry is not an object"})
+                continue
+
+            errors = []
+            doc_index = entry.get("doc_index")
+            if not isinstance(doc_index, int):
+                errors.append("doc_index missing or not integer")
+            elif doc_index < 0 or doc_index >= doc_count:
+                errors.append("doc_index out of range")
+
+            confidence = entry.get("confidence")
+            try:
+                confidence_value = float(confidence)
+            except (TypeError, ValueError):
+                errors.append("confidence missing or not numeric")
+                confidence_value = 0.0
+
+            reasoning = entry.get("reasoning")
+            if not isinstance(reasoning, str) or not reasoning.strip():
+                errors.append("reasoning missing or empty")
+
+            if errors:
+                issues.append({"index": idx, "error": ", ".join(errors)})
+                continue
+
+            normalized.append(
+                {
+                    "doc_index": doc_index,
+                    "confidence": confidence_value,
+                    "reasoning": reasoning.strip(),
+                    "context_needed": entry.get("context_needed"),
+                    "iterations": entry.get("iterations", iteration + 1),
+                }
+            )
+
+        return normalized, issues
+
+    @staticmethod
+    def _build_match_retry_prompt(
+        doc_concepts: List[Dict[str, any]], issues: List[Dict[str, any]], original_raw: str
+    ) -> str:
+        """Build prompt instructing the model to correct malformed match responses."""
+        issues_text = "\n".join(f"- Entry {issue['index']}: {issue['error']}" for issue in issues)
+
+        doc_context = "\n".join(
+            f"{idx}. {doc['description']}" for idx, doc in enumerate(doc_concepts)
+        )
+
+        return f"""Your previous JSON response listing matches between the code concept and documentation sections is invalid.
+Problems detected:
+{issues_text}
+
+Original response:
+{original_raw[:1000]}
+
+You must respond with a JSON array where each object includes:
+- "doc_index" (integer index into the documentation list)
+- "confidence" (numeric score between 0 and 1)
+- "reasoning" (short explanation of why they match)
+- "context_needed" (optional object)
+- "iterations" (optional integer)
+
+Documentation options for reference:
+{doc_context}
+
+Please respond with the corrected JSON array only."""
 
     def batch_extract_doc_concepts(self, sections: List[tuple]) -> List[Dict[str, any]]:
         """

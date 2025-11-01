@@ -188,6 +188,31 @@ def test_parse_json_with_retry_validates_required_fields(monkeypatch):
     assert result[0]["doc_index"] == 0
 
 
+def test_parse_json_content_supports_embedded_code_fences(monkeypatch):
+    """JSON wrapped in fences that contain inner code blocks should parse correctly."""
+    client_obj, provider = make_stub_provider()
+    monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
+    monkeypatch.setenv(LLMClient.PROVIDER_ENV_VAR, "openai")
+    monkeypatch.setenv(LLMClient.PROVIDER_KEY_ENVS["openai"], "openai-key")
+
+    client = LLMClient()
+
+    raw_response = """```json
+{
+  "content": "# Cache Overview\\n\\n```python\\nprint('hello')\\n```\\nThis block should survive.",
+  "filename": "cache-overview.md",
+  "title": "Cache Overview"
+}
+```"""
+
+    parsed = client._parse_json_content(raw_response)
+
+    assert parsed["filename"] == "cache-overview.md"
+    assert parsed["title"] == "Cache Overview"
+    # Ensure the inner code fence remains intact after parsing.
+    assert "```python" in parsed["content"]
+
+
 def test_request_json_parse_then_schema_retry_uses_correct_raw(monkeypatch):
     """Test that schema retry gets the parsed response, not the unparseable one."""
     responses = iter(

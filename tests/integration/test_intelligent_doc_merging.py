@@ -90,10 +90,30 @@ and circuit breakers to ensure resilience.
 
             # Add code concepts
             code_concepts = [
-                ("pipeline.py", "process_data", "Processes data through validation and transformation stages", (45, 120)),
-                ("cache.py", "CacheManager", "Manages in-memory cache with TTL and invalidation", (15, 95)),
-                ("errors.py", "retry_with_backoff", "Implements exponential backoff retry logic", (200, 245)),
-                ("errors.py", "CircuitBreaker", "Circuit breaker pattern implementation", (300, 380)),
+                (
+                    "pipeline.py",
+                    "process_data",
+                    "Processes data through validation and transformation stages",
+                    (45, 120),
+                ),
+                (
+                    "cache.py",
+                    "CacheManager",
+                    "Manages in-memory cache with TTL and invalidation",
+                    (15, 95),
+                ),
+                (
+                    "errors.py",
+                    "retry_with_backoff",
+                    "Implements exponential backoff retry logic",
+                    (200, 245),
+                ),
+                (
+                    "errors.py",
+                    "CircuitBreaker",
+                    "Circuit breaker pattern implementation",
+                    (300, 380),
+                ),
             ]
 
             for source, location, description, line_range in code_concepts:
@@ -110,14 +130,30 @@ and circuit breakers to ensure resilience.
 
             # Add matches between code and docs
             matches = [
-                ("doc:docs/architecture.md:Data Processing", "code:pipeline.py:process_data", 0.85,
-                 "The process_data function implements the data processing pipeline"),
-                ("doc:docs/architecture.md:Caching Strategy", "code:cache.py:CacheManager", 0.90,
-                 "CacheManager implements the caching strategy described"),
-                ("doc:docs/architecture.md:Error Handling", "code:errors.py:retry_with_backoff", 0.80,
-                 "retry_with_backoff provides the retry logic mentioned"),
-                ("doc:docs/architecture.md:Error Handling", "code:errors.py:CircuitBreaker", 0.85,
-                 "CircuitBreaker implements the circuit breaker pattern"),
+                (
+                    "doc:docs/architecture.md:Data Processing",
+                    "code:pipeline.py:process_data",
+                    0.85,
+                    "The process_data function implements the data processing pipeline",
+                ),
+                (
+                    "doc:docs/architecture.md:Caching Strategy",
+                    "code:cache.py:CacheManager",
+                    0.90,
+                    "CacheManager implements the caching strategy described",
+                ),
+                (
+                    "doc:docs/architecture.md:Error Handling",
+                    "code:errors.py:retry_with_backoff",
+                    0.80,
+                    "retry_with_backoff provides the retry logic mentioned",
+                ),
+                (
+                    "doc:docs/architecture.md:Error Handling",
+                    "code:errors.py:CircuitBreaker",
+                    0.85,
+                    "CircuitBreaker implements the circuit breaker pattern",
+                ),
             ]
 
             for doc_id, code_id, confidence, reasoning in matches:
@@ -165,13 +201,18 @@ and circuit breakers to ensure resilience.
         # Should NOT have mechanical "See `file:line`" on separate lines
         mechanical_pattern = r"^\s*See `.*:\d+(-\d+)?`\s*-"
         import re
+
         mechanical_matches = re.findall(mechanical_pattern, updated_content, re.MULTILINE)
         assert len(mechanical_matches) == 0, "Should not have mechanical reference insertions"
 
         # Verify the references ARE present in some form
         assert "pipeline.py" in updated_content, "Should reference pipeline.py"
-        assert "cache.py" in updated_content or "CacheManager" in updated_content, "Should reference cache implementation"
-        assert "errors.py" in updated_content or "retry" in updated_content.lower(), "Should reference error handling"
+        assert (
+            "cache.py" in updated_content or "CacheManager" in updated_content
+        ), "Should reference cache implementation"
+        assert (
+            "errors.py" in updated_content or "retry" in updated_content.lower()
+        ), "Should reference error handling"
 
         # Verify structure is maintained
         assert "# System Architecture" in updated_content, "Should maintain main heading"
@@ -198,10 +239,11 @@ and circuit breakers to ensure resilience.
 
         # Create content that's challenging for LLM to process
         malformed_content = "# \x00\x01\x02 Invalid UTF sequences and no real content"
-        malformed_path.write_text(malformed_content, encoding='utf-8', errors='replace')
+        malformed_path.write_text(malformed_content, encoding="utf-8", errors="replace")
 
         # Add a concept for this doc
         from defrag.semantic import Concept
+
         malformed_concept = Concept(
             id=f"doc:{malformed_doc}:Invalid",
             source=malformed_doc,
@@ -214,6 +256,7 @@ and circuit breakers to ensure resilience.
 
         # Add a match to this malformed doc
         from defrag.semantic import ConceptMatch
+
         match = ConceptMatch(
             code_concept_id="code:pipeline.py:process_data",
             doc_concept_id=malformed_concept.id,
@@ -316,11 +359,11 @@ This document has no semantic matches in the index.
         updated_content = updated_path.read_text()
 
         # Quality checks for natural integration
-        lines = updated_content.split('\n')
+        lines = updated_content.split("\n")
 
         # Check that references are integrated into sentences, not just appended
         for i, line in enumerate(lines):
-            if '.py:' in line:
+            if ".py:" in line:
                 # Reference should be part of a sentence or have context
                 # Not just "See `file:line`" on its own line
                 if line.strip().startswith("See `") and line.strip().endswith("`"):
@@ -342,9 +385,7 @@ This document has no semantic matches in the index.
                         "It",
                         "Our",
                     ]
-                    has_natural_integration = any(
-                        pattern in line for pattern in natural_patterns
-                    )
+                    has_natural_integration = any(pattern in line for pattern in natural_patterns)
                     # If a line has a code reference, it should be naturally integrated
                     # or be part of a longer explanation
                     if not has_natural_integration and len(line.strip()) < 50:
@@ -445,15 +486,17 @@ across all operations.
             # Check that it's not just a list dump
             # The content should flow naturally
             assert "## Core Processing" in updated_content
-            assert len(updated_content) > len(doc_content) + 100, "Should have substantial additions"
+            assert (
+                len(updated_content) > len(doc_content) + 100
+            ), "Should have substantial additions"
 
             # Check for natural flow indicators
-            paragraphs = updated_content.split('\n\n')
+            paragraphs = updated_content.split("\n\n")
             processing_section_found = False
             for para in paragraphs:
                 if "Core Processing" in para or processing_section_found:
                     processing_section_found = True
                     # Should have integrated the references, not just listed them
-                    if '.py' in para:
+                    if ".py" in para:
                         # Paragraph with code reference should have substance
                         assert len(para) > 50, "References should be part of substantial text"

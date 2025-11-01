@@ -172,19 +172,21 @@ Example response:
         # Build concept descriptions
         concepts_desc = []
         for concept in unassigned[:30]:  # Include more for better pattern recognition
-            concepts_desc.append({
-                "id": concept.id,
-                "source": concept.source,
-                "name": concept.location,
-                "description": concept.description
-            })
+            concepts_desc.append(
+                {
+                    "id": concept.id,
+                    "source": concept.source,
+                    "name": concept.location,
+                    "description": concept.description,
+                }
+            )
 
         # Try multiple levels of abstraction, zooming out each time
         abstraction_levels = [
             "specific functionality (e.g., 'User Authentication', 'Cache Management', 'Error Recovery')",
             "system capabilities (e.g., 'Data Management', 'Security Features', 'Performance Optimization')",
             "architectural layers (e.g., 'Business Logic', 'Infrastructure', 'External Integrations')",
-            "system aspects (e.g., 'Core Functionality', 'Supporting Utilities', 'Developer Tools')"
+            "system aspects (e.g., 'Core Functionality', 'Supporting Utilities', 'Developer Tools')",
         ]
 
         for level_idx, abstraction_level in enumerate(abstraction_levels):
@@ -243,7 +245,7 @@ Respond with JSON:
                 # If not enough were clustered, zoom out to next level
                 continue
 
-            except Exception as e:
+            except Exception:
                 # Try next abstraction level
                 continue
 
@@ -262,12 +264,14 @@ Respond with JSON:
 
         concepts_desc = []
         for concept in concepts:
-            concepts_desc.append({
-                "id": concept.id,
-                "source": concept.source,
-                "name": concept.location,
-                "description": concept.description
-            })
+            concepts_desc.append(
+                {
+                    "id": concept.id,
+                    "source": concept.source,
+                    "name": concept.location,
+                    "description": concept.description,
+                }
+            )
 
         prompt = f"""You must group ALL these code concepts by their PURPOSE in the system.
 
@@ -343,7 +347,7 @@ Respond with JSON (group ALL concepts):
 
             return result_clusters
 
-        except Exception as e:
+        except Exception:
             # This should never happen, but if it does, group everything
             # under a single system-level theme
             return {"System Components": concepts}
@@ -436,7 +440,7 @@ Respond with JSON containing:
         )
 
         # Use the content as provided by the model
-        content = response['content']
+        content = response["content"]
 
         # Add implementation references section
         if concepts:

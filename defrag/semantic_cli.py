@@ -48,6 +48,17 @@ def cmd_semantic_analyze(args):
     print(f"Progress log: {progress.log_path}")
     print()
 
+    # Determine resume path
+    output_path = _resolve_index_path(args.output, args.root)
+    resume_from = output_path if args.resume else None
+
+    if args.resume:
+        if os.path.exists(output_path):
+            print(f"Resume mode: will load existing index from {output_path}")
+        else:
+            print(f"Resume mode: no existing index found at {output_path}, starting fresh")
+            resume_from = None
+
     # Initialize
     try:
         progress.log("Initializing LLM client...")
@@ -57,7 +68,7 @@ def cmd_semantic_analyze(args):
             api_key=args.api_key,
             root_dir=args.root,
         )
-        analyzer = SemanticAnalyzer(llm, root_dir=args.root)
+        analyzer = SemanticAnalyzer(llm, root_dir=args.root, resume_from=resume_from)
         progress.log("LLM client ready")
     except Exception as e:
         progress.log(f"ERROR: {e}")
@@ -154,7 +165,6 @@ def cmd_semantic_analyze(args):
 
     # Save index to target repo
     progress.log("Saving semantic index...")
-    output_path = _resolve_index_path(args.output, args.root)
     analyzer.index.save(output_path)
     progress.log(f"Index saved to {output_path}")
     print(f"\nSemantic index saved: {output_path}")
@@ -420,6 +430,11 @@ def add_semantic_commands(subparsers, parent_parser):
     )
     parser_analyze.add_argument(
         "--output", default=DEFAULT_SEMANTIC_INDEX, help="Output file for semantic index"
+    )
+    parser_analyze.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from existing index (skips already-processed files)",
     )
     parser_analyze.add_argument("--limit-docs", type=int, help="Limit number of docs (for testing)")
     parser_analyze.add_argument(

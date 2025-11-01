@@ -33,17 +33,42 @@ class SemanticAnalyzer:
     5. Generate confidence scores
     """
 
-    def __init__(self, llm_client: Optional[LLMClient] = None, root_dir: str = "."):
+    def __init__(
+        self,
+        llm_client: Optional[LLMClient] = None,
+        root_dir: str = ".",
+        resume_from: Optional[str] = None,
+    ):
         """
         Initialize analyzer.
 
         Args:
             llm_client: LLM client for semantic analysis
             root_dir: Root directory of codebase
+            resume_from: Path to existing index to resume from (optional)
+
+        Raises:
+            ValueError: If resume_from path exists but index is malformed
         """
         self.llm = llm_client or LLMClient(root_dir=root_dir)
         self.root_dir = root_dir
-        self.index = SemanticIndex()
+
+        # Resume from existing index if specified
+        if resume_from and os.path.exists(resume_from):
+            try:
+                self.index = SemanticIndex.load(resume_from)
+                print(f"Resumed from existing index: {resume_from}")
+                print(
+                    f"  Existing: {len(self.index.concepts)} concepts, "
+                    f"{len(self.index.matches)} matches"
+                )
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to load index from {resume_from}: {e}\n"
+                    "Index may be corrupted. Remove it or fix manually before resuming."
+                ) from e
+        else:
+            self.index = SemanticIndex()
 
     def analyze_documentation(self, doc_paths: List[str], verbose: bool = False) -> None:
         """

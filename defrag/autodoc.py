@@ -8,6 +8,7 @@ purpose of code that has no documentation, with code as leaf nodes.
 from pathlib import Path
 from typing import List, Dict, Tuple
 import logging
+import re
 
 from .semantic import Concept, SemanticIndex
 from .llm import LLMClient
@@ -21,6 +22,50 @@ class ConceptualDocGenerator:
     def __init__(self, llm_client: LLMClient, root_dir: str = "."):
         self.llm = llm_client
         self.root_dir = Path(root_dir).resolve()
+
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        """
+        Sanitize a filename to prevent path traversal and other security issues.
+
+        Args:
+            filename: The filename to sanitize
+
+        Returns:
+            A safe filename with no path components
+        """
+        # First, get just the base filename (remove all path components)
+        # This handles both / and \ path separators
+        if "/" in filename:
+            filename = filename.split("/")[-1]
+        if "\\" in filename:
+            filename = filename.split("\\")[-1]
+
+        # Remove any parent directory references that might remain
+        filename = filename.replace("..", "")
+
+        # Remove any home directory references
+        if filename.startswith("~"):
+            filename = filename[1:]
+
+        # Remove any null bytes
+        filename = filename.replace("\x00", "")
+
+        # Remove leading/trailing dots and spaces
+        filename = filename.strip(". ")
+
+        # Replace any remaining problematic characters with underscore
+        filename = re.sub(r'[<>:"|?*]', "_", filename)
+
+        # Ensure it has a .md extension
+        if not filename.endswith(".md"):
+            filename = filename + ".md"
+
+        # If filename is empty or just .md, use a default
+        if filename == ".md" or not filename:
+            filename = "generated-doc.md"
+
+        return filename
 
     def analyze_semantic_clusters(
         self, undocumented_concepts: List[Concept]
@@ -165,7 +210,9 @@ Respond with JSON containing:
                     ref += f" (lines {c.line_range[0]}-{c.line_range[1]})"
                 content += ref + "\n"
 
-        return content, response["filename"]
+        # Sanitize the filename to prevent security issues
+        safe_filename = self.sanitize_filename(response["filename"])
+        return content, safe_filename
 
     def _validate_cluster_response(
         self, data: any, concepts_desc: List[Dict]
@@ -311,7 +358,7 @@ JSON only."""
         verbose: bool = False,
     ) -> List[str]:
         """
-        Write generated documentation to files.
+        Write generated documentation to files with security protections.
 
         Args:
             generated_docs: Dict mapping file paths to content
@@ -321,12 +368,49 @@ JSON only."""
 
         Returns:
             List of files written
+
+        Raises:
+            ValueError: If a file would be written outside docs/ directory
+            FileExistsError: If a file already exists (unless in dry_run mode)
         """
         written_files = []
-        root_path = Path(root_dir)
+        root_path = Path(root_dir).resolve()
+        docs_dir = root_path / "docs"
 
         for doc_path, content in generated_docs.items():
-            full_path = root_path / doc_path
+            # Ensure the path is within docs/ directory
+            if not doc_path.startswith("docs/"):
+                raise ValueError(
+                    f"Security: Attempted to write outside docs/ directory: {doc_path}"
+                )
+
+            # Resolve the full path and check it's within our expected directory
+            full_path = (root_path / doc_path).resolve()
+
+            # Security check: ensure resolved path is within docs directory
+            if not str(full_path).startswith(str(docs_dir)):
+                raise ValueError(
+                    f"Security: Path traversal detected. Attempted to write to: {full_path}"
+                )
+
+            # Check if file already exists
+            if full_path.exists():
+                if dry_run:
+                    if verbose:
+                        print(f"[DRY RUN] Would skip existing file: {doc_path}")
+                    continue
+                else:
+                    # Generate an alternative filename
+                    base_name = full_path.stem
+                    suffix = full_path.suffix
+                    counter = 1
+                    while full_path.exists():
+                        new_name = f"{base_name}-generated-{counter}{suffix}"
+                        full_path = full_path.parent / new_name
+                        doc_path = f"docs/{new_name}"
+                        counter += 1
+                    if verbose:
+                        print(f"  File exists, using alternative name: {doc_path}")
 
             if verbose:
                 action = "Would write" if dry_run else "Writing"

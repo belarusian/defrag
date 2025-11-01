@@ -40,32 +40,34 @@ Traditional tools only check #2. We check both.
 ### Layer 1: Semantic Understanding (LLM-Based)
 
 **Document Analyzer**:
-- Extracts concepts from markdown sections, as implemented in `defrag/analyzer.py:48-83`, where a language model is used to extract and index these concepts.
-- LLM answers: "What does this section explain?" This process is further detailed in `defrag/llm.py:375-409`, which defines a method to extract semantic concepts from documentation.
-- Output: `Concept(description, keywords, location)`, managed by the class in `defrag/semantic.py:16-54`, allowing conversion between object and dictionary forms.
+- Extracts concepts from markdown sections
+- LLM answers: "What does this section explain?"
+- Output: `Concept(description, keywords, location)`
 
 **Code Analyzer**:
-- Extracts functions/classes from code, as seen in `defrag/analyzer.py:85-135`, where a language model is used to analyze Python files.
-- LLM answers: "What does this code do conceptually?" This is supported by `defrag/llm.py:411-449`, which extracts and analyzes code snippets for conceptual understanding.
-- Output: `Concept(description, keywords, location)`, with relationships managed by the class in `defrag/semantic.py:58-95`.
+- Extracts functions/classes from code
+- LLM answers: "What does this code do conceptually?"
+- Output: `Concept(description, keywords, location)`
 
 **Matcher**:
-- For each code concept, query: "Which docs explain this?" This matching process is handled by `defrag/analyzer.py:153-220`, which uses a language model for matching code concepts to documentation concepts.
-- LLM scores relevance (0.0 to 1.0), a process refined through iterative context expansion as described in `defrag/refiner.py:95-234`.
-- Output: `Match(code_concept, doc_concept, confidence, reasoning)`, with matches managed and queried by the class in `defrag/semantic.py:99-178`. The refinement of low-confidence matches is specifically addressed in `defrag/refiner.py:112-200`, ensuring sufficient confidence levels are reached.
+- For each code concept, query: "Which docs explain this?"
+- LLM scores relevance (0.0 to 1.0)
+- Output: `Match(code_concept, doc_concept, confidence, reasoning)`
+
 ### Layer 2: Physical Validation (Grounding)
 
 **Link Validator**:
-- Checks if doc contains references to matched code, as implemented in `defrag/validator.py:84-109`, which validates a documentation entry by checking its code references and returns a status and list of issues.
-- Validates file paths and line numbers exist, a process further refined by the code in `defrag/analyzer.py:222-276`, which validates semantic matches between documentation and code by checking for physical links.
+- Checks if doc contains references to matched code
+- Validates file paths and line numbers exist
 - Output: `physical_link_valid: bool`
 
 **Confidence Adjuster**:
-- High semantic + valid physical = HIGH confidence (0.9+), a concept supported by the iterative refinement process in `defrag/analyzer.py:153-220`, which matches code concepts to documentation concepts using a language model.
-- High semantic + no physical = MEDIUM (suggest adding link), with suggestions for fixes handled by `defrag/validator.py:112-138`, which provides appropriate update or removal suggestions for invalid code references.
-- High semantic + broken physical = INVESTIGATE (doc outdated?), a scenario that can be identified and updated as seen in `defrag/cli.py:42-105`, which validates documentation against code and updates their status based on identified issues.
-- Low semantic + valid physical = INVESTIGATE (semantic model wrong?), a situation that might require further analysis as described in `defrag/analyzer.py:153-220`.
+- High semantic + valid physical = HIGH confidence (0.9+)
+- High semantic + no physical = MEDIUM (suggest adding link)
+- High semantic + broken physical = INVESTIGATE (doc outdated?)
+- Low semantic + valid physical = INVESTIGATE (semantic model wrong?)
 - Low semantic + no physical = GC candidate
+
 ## Workflow
 
 ### Step 1: Build Semantic Index
@@ -139,7 +141,8 @@ Docs need updating (code changed):
 
 ```bash
 # Preview what would be fixed
-When you run the command `python -m tools.defrag semantic-fix --doc docs/FAQ.md --preview`, it utilizes the functionality implemented in `defrag/fixer.py:238-273`. This function is responsible for generating a preview of potential fixes for broken links in a document by identifying semantic matches. By leveraging this code, the command provides a detailed look at what would be corrected, allowing you to review and verify the proposed changes before applying them.
+python -m tools.defrag semantic-fix --doc docs/FAQ.md --preview
+
 # Dry run (show changes but don't write)
 python -m tools.defrag semantic-fix --doc docs/FAQ.md
 
@@ -171,15 +174,25 @@ Shows all code matched to that doc with confidence and reasoning.
 
 ## Auto-Fix Details
 
-The `semantic-fix` command intelligently inserts references, as implemented in `defrag/fixer.py:53-100`, which handles the insertion of a code reference into a specified section of a markdown document, ensuring that the reasoning for the reference is optionally included.
+The `semantic-fix` command intelligently inserts references:
 
 **Insertion Strategy**:
 1. Finds the correct section by name
 2. Looks for existing reference groupings ("See:", "Reference:")
 3. Inserts near similar references or at end of section
-4. Preserves markdown formatting and spacing, a process also handled by `defrag/fixer.py:103-185`, which automatically fixes missing references by using a semantic index to identify and suggest high-confidence matches.
+4. Preserves markdown formatting and spacing
 
 **Format**:
+```markdown
+See `ingest/iot_rule/exploder_lambda/handler.py:177-208` - FAQ explains deduplication; code implements it
+```
+
+**Safety**:
+- Default is dry run (use `--apply` to write)
+- Only fixes high confidence matches (>= 0.7)
+- Adjustable via `--min-confidence`
+- Preview mode shows what would change
+
 ## Example Output
 
 ```json

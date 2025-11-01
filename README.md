@@ -77,13 +77,16 @@ defrag report                   # Show status
 
 # Semantic analysis (set provider + API key)
 # Anthropic Claude (default):
-To interact with the Anthropic Claude API for generating text responses based on user prompts, as implemented in `defrag/llm.py:786-808`, you need to set your API key. This is done by exporting your key with the command `export ANTHROPIC_API_KEY=your_key_here`. This setup is crucial for the functionality handled by the class defined in the mentioned code, ensuring seamless communication with the API.
+export ANTHROPIC_API_KEY=your_key_here
 # OpenAI (defaults to gpt-5-mini-2025-08-07):
 # export DEFRAG_LLM_PROVIDER=openai
 # export OPENAI_API_KEY=your_key_here
 # export DEFRAG_LLM_MODEL=gpt-4o   # optional override
 
-The command `defrag semantic-analyze --verbose` initiates a full analysis of the codebase, as implemented in `defrag/analyzer.py:36-46`, where the analyzer is initialized for semantic analysis using an optional LLM client. This setup allows for a comprehensive examination of the code, leveraging the capabilities of the specified model. Following the analysis, you can view the results with `defrag semantic-report --show-gc`, which provides insights into the findings. To ensure consistency and accuracy, discrepancies can be checked using `defrag semantic-validate --verbose`, further supported by the robust initialization process detailed in the aforementioned code.
+defrag semantic-analyze --verbose        # Full analysis
+defrag semantic-report --show-gc         # View results
+defrag semantic-validate --verbose       # Check discrepancies
+
 # Auto-fix missing links
 defrag semantic-fix --doc README.md --preview  # Preview
 defrag semantic-fix --doc README.md --apply    # Apply
@@ -156,15 +159,16 @@ Match     Med    0.75    0.60     0.40
 
 ### Physical Layer (Fast)
 
-The command `defrag index`, implemented in `defrag/cli.py:24-30`, initializes or rebuilds a documentation index by processing files from a specified root directory and saving the index to a specified location. This is complemented by `defrag scan`, which updates the index, as seen in `defrag/indexer.py:20-71`, where the code builds or updates a documentation index by scanning a directory for documentation files and preserving existing index data if available.
+```bash
+defrag index                              # Build index
+defrag scan                               # Update index
+defrag validate --doc path/to/doc.md     # Validate one doc
+defrag validate --all                     # Validate all
+defrag mark --doc path/to/doc.md --status good  # Mark status
+defrag report                             # Show report
+defrag gc --show                          # Show GC candidates
+```
 
-For validation purposes, `defrag validate --doc path/to/doc.md` and `defrag validate --all` are crucial. These commands, detailed in `defrag/cli.py:42-105`, validate documentation against code and update their status based on identified issues. This ensures that documentation remains accurate and up-to-date.
-
-To manage document statuses, `defrag mark --doc path/to/doc.md --status good` is used, as handled by `defrag/cli.py:108-135`, which updates the documentation status of a specified document in an index, handling errors and providing feedback. This aligns with the functionality in `defrag/indexer.py:127-152`, which updates the status and related information of a document within a given index.
-
-Generating a comprehensive report on the status of documents is facilitated by `defrag report`, implemented in `defrag/cli.py:174-211`. This command generates a report on the status of documents in an index, filtered by a specified status if provided.
-
-Finally, `defrag gc --show` shows garbage collection candidates, all part of the command-line interface defined in `defrag/cli.py:214-300`, which provides a robust toolset for managing and validating documentation indices and statuses.
 ### Semantic Layer (LLM-Powered)
 
 ```bash

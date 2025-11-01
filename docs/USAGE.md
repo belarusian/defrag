@@ -64,6 +64,18 @@ Together: Identify accurate, outdated, and orphaned documentation.
 4. **Report** - Show semantic matches with confidence scores
 5. **GC** - Identify truly orphaned docs (no semantic matches)
 
+See `defrag/refiner.py:95-234` - This section explains a comprehensive LLM-powered semantic analysis process for extracting, matching, validating, and reporting concepts from documentation and code, which closely matches the code concept of refining semantic matches using iterative context expansion and a language model.
+
+See `defrag/analyzer.py:24-363` - This section explains a comprehensive LLM-powered semantic analysis process for extracting, matching, validating, and reporting concepts from documentation and code, which directly relates to the code concept of semantic analysis and concept matching.
+
+See `defrag/analyzer.py:48-83` - This section explains a comprehensive LLM-powered semantic analysis process for extracting, matching, validating, and reporting concepts from documentation and code, which is related to the code concept of analyzing markdown documentation files to extract and index concepts using a language model.
+
+See `defrag/analyzer.py:85-135` - This section explains a comprehensive LLM-powered semantic analysis process for extracting, matching, validating, and reporting concepts from documentation and code, which is related to the code's function of analyzing Python files to extract and index concepts.
+
+See `defrag/analyzer.py:153-220` - This section explains a comprehensive LLM-powered semantic analysis process for extracting, matching, validating, and reporting concepts from documentation and code, which is relevant to the code concept.
+
+See `defrag/llm.py:769-783` - The section describes a comprehensive semantic analysis process for extracting, matching, validating, and reporting concepts, which aligns with the code's functionality of extracting and returning a list of concepts from multiple document sections for efficiency.
+
 ## Usage
 
 ### Quick Start (Physical Links Only)
@@ -71,6 +83,8 @@ Together: Identify accurate, outdated, and orphaned documentation.
 ```bash
 # Build index
 python -m tools.defrag index
+
+See `defrag/cli.py:214-300` - This section provides a command to defragment an index using a Python module, which is related to the CLI tool's functionality described in the code concept.
 
 # Validate a document
 python -m tools.defrag validate --doc contracts/sparkplug_brick_example.md
@@ -84,8 +98,12 @@ python -m tools.defrag report
 
 ### Semantic Analysis (Provider + API Key Required)
 
+
+See `defrag/llm.py:17-783` - The code concept involves using LLM providers with API keys, which is directly related to the documentation explaining the requirement of a provider and an API key for semantic analysis.
 ```bash
 # Set provider + API key
+
+See `defrag/llm.py:786-808` - This section provides instructions on setting the API key for the default provider, Anthropic Claude, which is essential for the code concept of interacting with the API.
 export ANTHROPIC_API_KEY=your_key_here            # default provider: Anthropic Claude
 # export DEFRAG_LLM_PROVIDER=openai
 # export OPENAI_API_KEY=your_key_here             # use for OpenAI models
@@ -107,6 +125,8 @@ python -m tools.defrag semantic-report --doc docs/FAQ.md
 # Auto-fix missing links (dry run first)
 python -m tools.defrag semantic-fix --doc docs/FAQ.md
 
+See `defrag/fixer.py:188-235` - The documentation section explicitly mentions performing a dry run to automatically fix missing links, which aligns closely with the code concept of auto-fixing document references with options for dry run and verbosity.
+
 # Preview fixes before applying
 python -m tools.defrag semantic-fix --doc docs/FAQ.md --preview
 
@@ -117,6 +137,8 @@ python -m tools.defrag semantic-fix --doc docs/FAQ.md --apply
 python -m tools.defrag semantic-fix --apply --min-confidence 0.8
 ```
 
+
+See `defrag/fixer.py:188-235` - The documentation section explicitly describes fixing documentation by applying semantic fixes to missing links, which aligns closely with the code concept of automatically fixing document references based on a semantic index. The mention of a confidence level in the documentation also matches the code's focus on confidence levels.
 ### Testing Mode (Limited Scope)
 
 ```bash
@@ -131,6 +153,12 @@ python -m tools.defrag semantic-analyze \
 
 ```bash
 # Default provider is Anthropic unless DEFRAG_LLM_PROVIDER is set
+
+See `defrag/llm.py:17-783` - The code concept involves model selection and provider configuration, which aligns with the documentation on specifying a different provider using the DEFRAG_LLM_PROVIDER environment variable.
+
+See `defrag/llm.py:786-808` - The documentation section describes Anthropic as the default provider, which aligns with the code concept of interacting with the Anthropic Claude API for text generation. This suggests that the code is implementing functionality related to the default provider setting described in the documentation.
+
+See `defrag/llm.py:79-89` - The code concept mentions provider type selection, which is related to the default provider setting described in this documentation.
 export ANTHROPIC_API_KEY=your_key_here
 # Optional overrides:
 # export DEFRAG_LLM_PROVIDER=openai
@@ -177,12 +205,22 @@ documents:
     notes: "Never referenced in recent scans - GC candidate"
 ```
 
+See `defrag/cli.py:42-105` - The code concept involves validating documentation and updating their status based on issues, which aligns with the documentation section outlining the schema for indexing documents, including their validation status and code references.
+
 ## Code Reference Format
 
 Documentation should include code references in format:
 
 ```
 See: `path/to/file.py:start_line-end_line`
+
+See `defrag/scanner.py:109-144` - The code concept of scanning and validating code references in documentation matches the explanation of how Defrag validates code reference patterns.
+
+See `defrag/scanner.py:68-106` - The section explains the format for including code references in documentation and how Defrag validates these patterns, which aligns with the function's purpose of extracting and normalizing code reference patterns.
+
+See `defrag/validator.py:84-109` - The section explains the format for including code references in documentation and how validation is performed, which is relevant to the function's purpose.
+
+See `defrag/validator.py:14-33` - This section explains the format for including code references in documentation and how Defrag validates these patterns, which aligns with the function's purpose of parsing code references into file paths and line numbers.
 ```
 
 Examples:
@@ -199,6 +237,8 @@ After major code changes:
 # 1. Scan affected modules
 python -m tools.defrag scan --path ingest/
 
+See `defrag/cli.py:33-39` - The code concept involves scanning a codebase and updating an index, which aligns with the description of scanning affected modules using a defragmentation tool.
+
 # 2. Validate related docs
 python -m tools.defrag validate --all
 
@@ -213,6 +253,8 @@ python -m tools.defrag report --status unchecked
 python -m tools.defrag mark --doc docs/FIXED.md --status good
 ```
 
+
+See `defrag/cli.py:214-300` - The code concept includes a command to mark documentation, which aligns with the section explaining how to mark a document as 'good'. This suggests that the documentation is directly related to the functionality implemented in the code.
 ## Files
 
 **Physical Layer**:

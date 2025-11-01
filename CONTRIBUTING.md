@@ -18,11 +18,25 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Set up API key for testing (choose provider)
+
+See `defrag/llm.py:17-783` - The code concept involves setting up API keys for LLM providers, which aligns with the documentation on setting up an API key for Anthropic Claude.
+
+See `defrag/llm.py:786-808` - This section directly relates to setting up an API key for Anthropic Claude, which is necessary for interacting with the API as described in the code concept.
+
+See `defrag/llm.py:79-89` - The code concept involves initializing a client for the 'anthropic' provider, which aligns with setting up an API key for Anthropic Claude.
 export ANTHROPIC_API_KEY=your_key_here           # Anthropic Claude (default)
 # export DEFRAG_LLM_PROVIDER=openai
 # export OPENAI_API_KEY=your_key_here            # OpenAI
 ```
 
+
+See `defrag/llm.py:17-783` - The code concept mentions environment variables for API keys, which matches the documentation on setting an environment variable for the OpenAI API key.
+
+See `defrag/llm.py:811-868` - The code concept involves interacting with OpenAI models, which likely requires setting an API key for authentication. This documentation section provides instructions for setting an environment variable for the OpenAI API key, which is relevant to the code's functionality.
+
+See `defrag/llm.py:816-828` - The documentation section provides instructions for setting an environment variable for the OpenAI API key, which is relevant to the code concept of initializing an OpenAI client with an API key.
+
+See `defrag/llm.py:79-89` - The code concept involves initializing a client for the 'openai' provider, which aligns with setting an environment variable for the OpenAI API key.
 ## Running Tests
 
 ```bash
@@ -36,6 +50,8 @@ pytest --cov=defrag --cov-report=html
 pytest tests/unit/test_semantic_models.py::TestConcept::test_concept_creation
 ```
 
+
+See `defrag/semantic.py:16-54` - The documentation section explains testing concept creation in semantic models, which aligns with the code's focus on managing semantic concepts.
 ## Code Style
 
 We use Black and Ruff for formatting:
@@ -76,12 +92,16 @@ defrag/
 3. Add tests in `tests/unit` or `tests/integration` as appropriate
 4. Update `docs/SEMANTIC.md`
 
+See `defrag/semantic.py:16-54` - The documentation section outlines steps for implementing and documenting a new semantic analysis feature, which aligns closely with the code concept of managing semantic concepts and conversion between object and dictionary forms.
+
 ### New CLI Command
 
 1. Add command function in `cli.py` or `semantic_cli.py`
 2. Register in subparsers
 3. Add tests
 4. Update README.md usage section
+
+See `defrag/cli.py:214-300` - This section outlines the steps to add a new command to the CLI, which aligns with the code concept of defining a command-line interface for a documentation defragmentation tool.
 
 ### New Physical Validation Feature
 

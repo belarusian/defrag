@@ -104,11 +104,17 @@ def _clean_markdown_output(text: str) -> str:
     """Strip surrounding code fences and whitespace from LLM output."""
     cleaned = (text or "").strip()
     if cleaned.startswith("```"):
-        parts = cleaned.split("```", 2)
-        if len(parts) >= 2:
-            cleaned = parts[1]
-            if "\n" in cleaned:
-                cleaned = cleaned.split("\n", 1)[1]
+        lines = cleaned.splitlines()
+        if lines:
+            closing_index = None
+            for i in range(len(lines) - 1, 0, -1):
+                if lines[i].strip().startswith("```"):
+                    closing_index = i
+                    break
+
+            if closing_index and closing_index > 0:
+                lines = lines[1:closing_index]
+                cleaned = "\n".join(lines).strip()
     return cleaned.strip()
 
 

@@ -27,9 +27,16 @@ class IntelligentScanner:
             "other": [],
         }
 
-    def scan(self, max_depth: int = 10, verbose: bool = False) -> Dict[str, List[str]]:
+    def scan(
+        self, max_depth: int = 50, max_files: int = 10000, verbose: bool = False
+    ) -> Dict[str, List[str]]:
         """
         Intelligently scan directory tree using LLM guidance.
+
+        Args:
+            max_depth: Maximum directory depth to explore (default 50, use None for unlimited)
+            max_files: Maximum total files to scan before stopping (default 10000)
+            verbose: Print progress information
 
         Returns:
             Dictionary with categorized files:
@@ -39,12 +46,26 @@ class IntelligentScanner:
             - 'other': Other relevant files
         """
         # Start from root
-        self._explore_directory(self.root_dir, depth=0, max_depth=max_depth, verbose=verbose)
+        self._explore_directory(
+            self.root_dir, depth=0, max_depth=max_depth, max_files=max_files, verbose=verbose
+        )
         return self.files_to_scan
 
-    def _explore_directory(self, dir_path: Path, depth: int, max_depth: int, verbose: bool):
+    def _explore_directory(
+        self, dir_path: Path, depth: int, max_depth: int, max_files: int, verbose: bool
+    ):
         """Recursively explore directory using LLM guidance."""
-        if depth >= max_depth:
+        # Check depth limit if specified
+        if max_depth is not None and depth >= max_depth:
+            if verbose:
+                print(f"  Max depth {max_depth} reached at {dir_path.relative_to(self.root_dir)}")
+            return
+
+        # Check file count limit
+        total_files = sum(len(files) for files in self.files_to_scan.values())
+        if total_files >= max_files:
+            if verbose:
+                print(f"  Max files limit {max_files} reached")
             return
 
         rel_path = dir_path.relative_to(self.root_dir)
@@ -76,6 +97,13 @@ class IntelligentScanner:
             if entry.is_file():
                 filename = entry.name
                 if filename in decisions.get("scan_files", []):
+                    # Check file limit before adding
+                    total_files = sum(len(files) for files in self.files_to_scan.values())
+                    if total_files >= max_files:
+                        if verbose:
+                            print(f"  Max files limit {max_files} reached, stopping")
+                        return
+
                     rel_file = str(entry.relative_to(self.root_dir))
                     raw_category = decisions.get("file_categories", {}).get(filename, "other")
                     # Normalize category to lowercase and ensure it's valid
@@ -91,7 +119,7 @@ class IntelligentScanner:
             if entry.is_dir():
                 dir_name = entry.name
                 if dir_name in decisions.get("explore_subdirs", []):
-                    self._explore_directory(entry, depth + 1, max_depth, verbose)
+                    self._explore_directory(entry, depth + 1, max_depth, max_files, verbose)
 
     def _prepare_directory_listing(self, dir_path: Path, entries: List[Path]) -> Dict:
         """Prepare structured directory listing for LLM."""
@@ -291,7 +319,11 @@ JSON only."""
 
 
 def scan_intelligently(
-    llm_client, root_dir: str = ".", verbose: bool = False
+    llm_client,
+    root_dir: str = ".",
+    max_depth: int = 50,
+    max_files: int = 10000,
+    verbose: bool = False,
 ) -> Dict[str, List[str]]:
     """
     Convenience function to scan a directory tree intelligently.
@@ -299,10 +331,12 @@ def scan_intelligently(
     Args:
         llm_client: LLM client instance
         root_dir: Root directory to scan
+        max_depth: Maximum directory depth (default 50, None for unlimited)
+        max_files: Maximum files to discover (default 10000)
         verbose: Print progress
 
     Returns:
         Dictionary with categorized files
     """
     scanner = IntelligentScanner(llm_client, root_dir)
-    return scanner.scan(verbose=verbose)
+    return scanner.scan(max_depth=max_depth, max_files=max_files, verbose=verbose)

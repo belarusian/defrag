@@ -316,11 +316,27 @@ def cmd_semantic_fix(args):
     if not args.apply:
         print("[DRY RUN] Use --apply to write changes\n")
 
+    provider = (args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR, "anthropic")).lower()
+    try:
+        llm = LLMClient(
+            model=args.model,
+            provider=provider,
+            api_key=args.api_key,
+            root_dir=args.root,
+        )
+    except Exception as e:
+        print(f"Error initializing LLM client: {e}")
+        key_env = LLMClient.PROVIDER_KEY_ENVS.get(provider)
+        if key_env:
+            print(f"\nHint: Set {key_env} environment variable or pass --api-key")
+        return 1
+
     # Part 1: Fix existing documentation (add missing links)
     print("Step 1: Fixing missing links in existing documentation...")
     all_changes = fix_all_documents(
         index,
-        args.root,
+        llm,
+        root_dir=args.root,
         dry_run=not args.apply,
         min_confidence=args.min_confidence,
         verbose=False,
@@ -336,22 +352,6 @@ def cmd_semantic_fix(args):
 
     # Part 2: Generate conceptual documentation for undocumented code
     print("\nStep 2: Generating conceptual documentation for undocumented code...")
-
-    # Initialize LLM for doc generation
-    provider = (args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR, "anthropic")).lower()
-    try:
-        llm = LLMClient(
-            model=args.model,
-            provider=provider,
-            api_key=args.api_key,
-            root_dir=args.root,
-        )
-    except Exception as e:
-        print(f"Error initializing LLM client: {e}")
-        key_env = LLMClient.PROVIDER_KEY_ENVS.get(provider)
-        if key_env:
-            print(f"\nHint: Set {key_env} environment variable or pass --api-key")
-        return 1
 
     # Generate conceptual docs for undocumented code
     generated_docs = generate_conceptual_docs_for_undocumented_code(

@@ -8,7 +8,82 @@ import os
 import re
 from typing import List, Optional, Tuple
 
-from .semantic import SemanticIndex
+from .llm import LLMClient
+from .semantic import Concept, SemanticIndex
+
+
+def _clean_markdown_output(text: str) -> str:
+    """Strip surrounding code fences and whitespace from LLM output."""
+    cleaned = (text or "").strip()
+    if cleaned.startswith("```"):
+        parts = cleaned.split("```", 2)
+        if len(parts) >= 2:
+            cleaned = parts[1]
+            if "\n" in cleaned:
+                cleaned = cleaned.split("\n", 1)[1]
+    return cleaned.strip()
+
+
+def rewrite_document_with_llm(
+    doc_path: str,
+    original_content: str,
+    matches_payload: List[dict],
+    llm: LLMClient,
+    max_tokens: int = 3000,
+    verbose: bool = False,
+) -> Optional[str]:
+    """Ask the LLM to intelligently merge references into documentation."""
+
+    if not matches_payload:
+        return None
+
+    prompt_lines = [
+        "You are updating project documentation to incorporate implementation references.",
+        "Integrate the provided code references naturally into the document.",
+        "Maintain the existing tone and structure unless a small adjustment improves clarity.",
+        "Avoid dumping lists of 'See ...'; weave references into prose or dedicated sections.",
+        "Return only the updated markdown document.",
+        "",
+        f"Document path: {doc_path}",
+        "",
+        "Current document:",
+        "```markdown",
+        original_content,
+        "```",
+        "",
+        "Code references to incorporate:",
+    ]
+
+    for payload in matches_payload:
+        prompt_lines.append(
+            f"- Section: {payload['section']}\n  Code: `{payload['code_reference']}`\n"
+            f"  Code summary: {payload['code_summary']}\n  Reasoning: {payload['reasoning']}"
+        )
+
+    prompt_lines.extend(
+        [
+            "",
+            "Rewrite the document so these references feel native to the narrative.",
+            "Return only the updated markdown with no additional commentary.",
+        ]
+    )
+
+    prompt = "\n".join(prompt_lines)
+
+    try:
+        response = llm.generate_text(prompt, max_tokens=max_tokens)
+    except Exception as exc:
+        if verbose:
+            print(f"    LLM rewrite failed for {doc_path}: {exc}")
+        return None
+
+    cleaned = _clean_markdown_output(response)
+    if not cleaned:
+        if verbose:
+            print(f"    LLM rewrite returned empty content for {doc_path}")
+        return None
+
+    return cleaned
 
 
 def find_section_in_markdown(content: str, section_name: str) -> Optional[Tuple[int, int]]:
@@ -103,6 +178,7 @@ def insert_code_reference(
 def fix_document_references(
     doc_path: str,
     semantic_index: SemanticIndex,
+    llm_client: LLMClient,
     root_dir: str = ".",
     dry_run: bool = False,
     verbose: bool = False,
@@ -144,9 +220,7 @@ def fix_document_references(
     with open(full_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    changes = []
-    modified_content = content
-
+    payloads = []
     for match in fixable:
         doc_concept = semantic_index.get_concept(match.doc_concept_id)
         code_concept = semantic_index.get_concept(match.code_concept_id)
@@ -154,39 +228,89 @@ def fix_document_references(
         if not doc_concept or not code_concept:
             continue
 
-        # Try to insert reference
-        new_content, success = insert_code_reference(
-            modified_content, doc_concept.location, match.suggested_link, match.reasoning
+        if not isinstance(doc_concept, Concept) or not isinstance(code_concept, Concept):
+            continue
+
+        payloads.append(
+            {
+                "section": doc_concept.location,
+                "code_reference": match.suggested_link,
+                "reasoning": match.reasoning or "",
+                "code_summary": code_concept.description,
+                "confidence": match.confidence,
+            }
         )
 
-        if success:
-            modified_content = new_content
-            change_desc = (
-                f"Added reference in '{doc_concept.location}': {match.suggested_link} "
-                f"(confidence: {match.confidence:.2f})"
+    if not payloads:
+        if verbose:
+            print(f"  Skipping {doc_path}: no usable match data")
+        return []
+
+    rewritten = rewrite_document_with_llm(
+        doc_path=doc_path,
+        original_content=content,
+        matches_payload=payloads,
+        llm=llm_client,
+        verbose=verbose,
+    )
+
+    changes: List[str] = []
+
+    if rewritten:
+        if rewritten != content:
+            if dry_run:
+                if verbose:
+                    print(
+                        f"  [DRY RUN] Would rewrite {doc_path} with {len(payloads)} reference(s)"
+                    )
+            else:
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(rewritten)
+                if verbose:
+                    print(f"  Rewrote {doc_path} with {len(payloads)} reference(s)")
+
+            changes.append(
+                f"Rewrote document with {len(payloads)} reference(s) integrated"
             )
-            changes.append(change_desc)
-
+        else:
             if verbose:
-                print(f"  + {change_desc}")
-
-    # Write changes if not dry run
-    if changes and not dry_run:
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(modified_content)
-
+                print(f"  LLM rewrite produced no changes for {doc_path}")
+    else:
         if verbose:
-            print(f"\nWrote {len(changes)} changes to {doc_path}")
+            print(f"  Falling back to mechanical insertion for {doc_path}")
 
-    elif changes and dry_run:
-        if verbose:
-            print(f"\n[DRY RUN] Would write {len(changes)} changes to {doc_path}")
+        modified_content = content
+        fallback_changes = []
+        for item in payloads:
+            modified_content, success = insert_code_reference(
+                modified_content,
+                item["section"],
+                item["code_reference"],
+                item["reasoning"],
+            )
+            if success:
+                fallback_changes.append(item)
+
+        if fallback_changes:
+            if dry_run:
+                if verbose:
+                    print(
+                        f"    [DRY RUN] Would add {len(fallback_changes)} reference(s) mechanically"
+                    )
+            else:
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(modified_content)
+            for item in fallback_changes:
+                changes.append(
+                    f"Added reference in '{item['section']}': {item['code_reference']}"
+                )
 
     return changes
 
 
 def fix_all_documents(
     semantic_index: SemanticIndex,
+    llm_client: LLMClient,
     root_dir: str = ".",
     dry_run: bool = False,
     min_confidence: float = 0.7,
@@ -224,7 +348,14 @@ def fix_all_documents(
         if verbose:
             print(f"Fixing {doc_path}...")
 
-        changes = fix_document_references(doc_path, semantic_index, root_dir, dry_run, verbose)
+        changes = fix_document_references(
+            doc_path,
+            semantic_index,
+            llm_client,
+            root_dir=root_dir,
+            dry_run=dry_run,
+            verbose=verbose,
+        )
 
         if changes:
             all_changes[doc_path] = changes

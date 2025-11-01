@@ -92,6 +92,11 @@ class LLMClient:
         """Send prompt to provider and return raw text response."""
         return self._provider.send_prompt(prompt, max_tokens)
 
+    def generate_text(self, prompt: str, max_tokens: int = 2000) -> str:
+        """Generate free-form text response from the provider."""
+        response = self._send_prompt(prompt, max_tokens=max_tokens)
+        return (response or "").strip()
+
     def _request_json(
         self, prompt: str, max_tokens: int, log_context: str, validator, schema_retry_builder
     ):

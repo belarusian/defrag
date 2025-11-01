@@ -18,28 +18,19 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Set up API key for testing (choose provider)
-
-See `defrag/llm.py:17-783` - The code concept involves setting up API keys for LLM providers, which aligns with the documentation on setting up an API key for Anthropic Claude.
-
-See `defrag/llm.py:786-808` - This section directly relates to setting up an API key for Anthropic Claude, which is necessary for interacting with the API as described in the code concept.
-
-See `defrag/llm.py:79-89` - The code concept involves initializing a client for the 'anthropic' provider, which aligns with setting up an API key for Anthropic Claude.
 export ANTHROPIC_API_KEY=your_key_here           # Anthropic Claude (default)
+
+When setting up your API key for testing with Anthropic Claude, it's essential to understand how this key is utilized within the system. The process of interacting with large language models (LLMs) from various providers, including Anthropic, is defined in the client class implemented in `defrag/llm.py:17-783`. This class is crucial for semantic analysis and requires proper API key configuration to function correctly.
+
+Specifically, for Anthropic Claude, the interaction is further detailed in the class defined in `defrag/llm.py:786-808`, which handles generating text responses based on user prompts. This interaction necessitates the API key setup as described here.
+
+Additionally, the initialization of a client and provider object, which is based on the specified provider type such as 'anthropic', is handled by the code in `defrag/llm.py:79-89`. This initialization process underscores the importance of correctly setting up your API key to ensure seamless communication with the Anthropic Claude API.
 # export DEFRAG_LLM_PROVIDER=openai
 # export OPENAI_API_KEY=your_key_here            # OpenAI
-```
 
-
-See `defrag/llm.py:17-783` - The code concept mentions environment variables for API keys, which matches the documentation on setting an environment variable for the OpenAI API key.
-
-See `defrag/llm.py:811-868` - The code concept involves interacting with OpenAI models, which likely requires setting an API key for authentication. This documentation section provides instructions for setting an environment variable for the OpenAI API key, which is relevant to the code's functionality.
-
-See `defrag/llm.py:816-828` - The documentation section provides instructions for setting an environment variable for the OpenAI API key, which is relevant to the code concept of initializing an OpenAI client with an API key.
-
-See `defrag/llm.py:79-89` - The code concept involves initializing a client for the 'openai' provider, which aligns with setting an environment variable for the OpenAI API key.
 ## Running Tests
 
-```bash
+When setting up your environment for running tests, it's crucial to configure your API keys correctly. For OpenAI, this involves setting the `OPENAI_API_KEY` environment variable, as detailed in the documentation. This setup is essential for initializing an OpenAI client, as seen in `defrag/llm.py:816-828`, where the client is initialized with a specified model and API key. The process of interacting with OpenAI models, which requires this API key for authentication, is further handled by the class defined in `defrag/llm.py:811-868`. Additionally, the broader context of interacting with large language models (LLMs) from various providers, including OpenAI, is implemented in `defrag/llm.py:17-783`, where environment variables for API keys are a key consideration. Finally, the initialization of a client for the 'openai' provider, which aligns with setting this environment variable, is addressed in `defrag/llm.py:79-89`.
 # Run all tests
 pytest
 
@@ -47,16 +38,11 @@ pytest
 pytest --cov=defrag --cov-report=html
 
 # Run specific test
-pytest tests/unit/test_semantic_models.py::TestConcept::test_concept_creation
-```
+To ensure the robustness of our semantic models, we run targeted tests such as `pytest tests/unit/test_semantic_models.py::TestConcept::test_concept_creation`. This test specifically examines the creation of concepts, a process intricately handled by the class implemented in `defrag/semantic.py:16-54`. This class is responsible for representing and managing semantic concepts extracted from documents or code, allowing seamless conversion between object and dictionary forms.
 
-
-See `defrag/semantic.py:16-54` - The documentation section explains testing concept creation in semantic models, which aligns with the code's focus on managing semantic concepts.
 ## Code Style
 
 We use Black and Ruff for formatting:
-
-```bash
 # Format code
 black defrag tests examples
 
@@ -87,22 +73,16 @@ defrag/
 
 ### New Semantic Analysis Feature
 
-1. Add logic to `semantic.py` or `analyzer.py`
-2. Update `SemanticIndex` model if needed
-3. Add tests in `tests/unit` or `tests/integration` as appropriate
-4. Update `docs/SEMANTIC.md`
-
-See `defrag/semantic.py:16-54` - The documentation section outlines steps for implementing and documenting a new semantic analysis feature, which aligns closely with the code concept of managing semantic concepts and conversion between object and dictionary forms.
-
+1. Add logic to `semantic.py` or `analyzer.py`, as seen in `defrag/semantic.py:16-54`, where a class is defined for representing and managing semantic concepts extracted from documents or code. This implementation allows for conversion between object and dictionary forms, which is crucial for the new feature.
+2. Update `SemanticIndex` model if needed to ensure it aligns with the new logic and supports the conversion processes handled by the class in `defrag/semantic.py:16-54`.
+3. Add tests in `tests/unit` or `tests/integration` as appropriate to verify the functionality and integration of the new semantic analysis feature, ensuring that the conversion between object and dictionary forms is thoroughly tested.
+4. Update `docs/SEMANTIC.md` to reflect the changes and enhancements made, including the new capabilities for managing semantic concepts as implemented in `defrag/semantic.py:16-54`.
 ### New CLI Command
 
-1. Add command function in `cli.py` or `semantic_cli.py`
-2. Register in subparsers
-3. Add tests
-4. Update README.md usage section
-
-See `defrag/cli.py:214-300` - This section outlines the steps to add a new command to the CLI, which aligns with the code concept of defining a command-line interface for a documentation defragmentation tool.
-
+1. Add command function in `cli.py` or `semantic_cli.py`, as seen in the implementation of the command-line interface for a documentation defragmentation tool in `defrag/cli.py:214-300`, which includes commands to index, scan, validate, and mark documentation.
+2. Register in subparsers, a process that is crucial for integrating new commands into the existing CLI structure, similar to how commands are structured in the aforementioned code.
+3. Add tests to ensure the new command functions correctly within the CLI, following the robust testing practices that support the functionality seen in `defrag/cli.py:214-300`.
+4. Update README.md usage section to reflect the new command, ensuring users understand how to utilize it, much like the comprehensive documentation provided for existing commands in the CLI.
 ### New Physical Validation Feature
 
 1. Add logic to `validator.py`

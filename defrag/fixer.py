@@ -46,7 +46,9 @@ def _sanitize_filename(filename: str) -> str:
     return safe
 
 
-def _split_document_into_chunks(content: str, max_chars: int = SECTION_CHUNK_CHAR_LIMIT) -> List[str]:
+def _split_document_into_chunks(
+    content: str, max_chars: int = SECTION_CHUNK_CHAR_LIMIT
+) -> List[str]:
     lines = content.split("\n")
     chunks: List[str] = []
     current: List[str] = []
@@ -225,7 +227,7 @@ def _rewrite_sections(
 
         if not _is_rewrite_safe(section_content, cleaned):
             if verbose:
-                print(f"      Section rewrite failed safety checks; skipping")
+                print("      Section rewrite failed safety checks; skipping")
             continue
 
         new_lines = lines[:start_line] + cleaned.split("\n") + lines[end_line + 1 :]
@@ -261,11 +263,7 @@ def _rewrite_large_document(
     anything_changed = False
 
     for index, chunk_text in enumerate(chunks):
-        chunk_matches = [
-            m
-            for m in matches_payload
-            if m["section"].lower() in chunk_text.lower()
-        ]
+        chunk_matches = [m for m in matches_payload if m["section"].lower() in chunk_text.lower()]
 
         next_preview = chunks[index + 1][:300] if index + 1 < total_chunks else ""
 
@@ -351,13 +349,15 @@ def _rewrite_chunk_with_llm(
     ]
 
     if next_preview:
-        prompt_lines.extend([
-            "",
-            "Upcoming chunk preview:",
-            "```markdown",
-            next_preview,
-            "```",
-        ])
+        prompt_lines.extend(
+            [
+                "",
+                "Upcoming chunk preview:",
+                "```markdown",
+                next_preview,
+                "```",
+            ]
+        )
 
     prompt_lines.append("")
     prompt_lines.append("Relevant code references:")
@@ -427,7 +427,9 @@ def _validate_chunk_response(data: any) -> Tuple[Dict[str, Any], List[Dict[str, 
     return normalized, issues
 
 
-def _build_chunk_retry_prompt(parsed: Dict[str, Any], issues: List[Dict[str, str]], original_raw: str) -> str:
+def _build_chunk_retry_prompt(
+    parsed: Dict[str, Any], issues: List[Dict[str, str]], original_raw: str
+) -> str:
     issues_text = "\n".join(f"- {issue['error']}" for issue in issues)
     return f"""Your JSON response for the chunk rewrite was invalid.
 
@@ -621,18 +623,14 @@ def fix_document_references(
         if rewritten != content:
             if dry_run:
                 if verbose:
-                    print(
-                        f"  [DRY RUN] Would rewrite {doc_path} with {len(payloads)} reference(s)"
-                    )
+                    print(f"  [DRY RUN] Would rewrite {doc_path} with {len(payloads)} reference(s)")
             else:
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(rewritten)
                 if verbose:
                     print(f"  Rewrote {doc_path} with {len(payloads)} reference(s)")
 
-            changes.append(
-                f"Rewrote document with {len(payloads)} reference(s) integrated"
-            )
+            changes.append(f"Rewrote document with {len(payloads)} reference(s) integrated")
         else:
             if verbose:
                 print(f"  LLM rewrite produced no changes for {doc_path}")
@@ -667,9 +665,7 @@ def fix_document_references(
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(modified_content)
             for item in fallback_changes:
-                changes.append(
-                    f"Added reference in '{item['section']}': {item['code_reference']}"
-                )
+                changes.append(f"Added reference in '{item['section']}': {item['code_reference']}")
 
     return changes
 

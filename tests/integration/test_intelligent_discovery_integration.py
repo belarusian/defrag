@@ -35,7 +35,8 @@ def test_intelligent_discovery_real_project():
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a realistic Python project structure
         # Root files
-        Path(tmpdir, "README.md").write_text("""# TestProject
+        Path(tmpdir, "README.md").write_text(
+            """# TestProject
 
 A test Python project for validating intelligent discovery.
 
@@ -44,9 +45,11 @@ A test Python project for validating intelligent discovery.
 
 ## Usage
 Import and use the main module.
-""")
+"""
+        )
 
-        Path(tmpdir, "setup.py").write_text("""from setuptools import setup, find_packages
+        Path(tmpdir, "setup.py").write_text(
+            """from setuptools import setup, find_packages
 
 setup(
     name="testproject",
@@ -54,36 +57,44 @@ setup(
     packages=find_packages(),
     install_requires=["requests", "pytest"],
 )
-""")
+"""
+        )
 
-        Path(tmpdir, "requirements.txt").write_text("""requests>=2.25.0
+        Path(tmpdir, "requirements.txt").write_text(
+            """requests>=2.25.0
 pytest>=6.0.0
 black>=21.0
-""")
+"""
+        )
 
-        Path(tmpdir, ".gitignore").write_text("""*.pyc
+        Path(tmpdir, ".gitignore").write_text(
+            """*.pyc
 __pycache__/
 .venv/
 venv/
 build/
 dist/
 *.egg-info/
-""")
+"""
+        )
 
         # Main package
         pkg = Path(tmpdir, "testproject")
         pkg.mkdir()
 
-        Path(pkg, "__init__.py").write_text('''"""TestProject - A sample Python package."""
+        Path(pkg, "__init__.py").write_text(
+            '''"""TestProject - A sample Python package."""
 
 __version__ = "0.1.0"
 __author__ = "Test Author"
 
 from .core import process_data
 from .utils import format_output
-''')
+'''
+        )
 
-        Path(pkg, "core.py").write_text('''"""Core processing module."""
+        Path(pkg, "core.py").write_text(
+            '''"""Core processing module."""
 
 def process_data(data):
     """Process input data and return results.
@@ -95,9 +106,11 @@ def process_data(data):
         Processed results
     """
     return {"processed": data, "status": "success"}
-''')
+'''
+        )
 
-        Path(pkg, "utils.py").write_text('''"""Utility functions."""
+        Path(pkg, "utils.py").write_text(
+            '''"""Utility functions."""
 
 def format_output(result):
     """Format result for display."""
@@ -106,7 +119,8 @@ def format_output(result):
 def validate_input(data):
     """Validate input data."""
     return data is not None
-''')
+'''
+        )
 
         # Submodule
         handlers = pkg / "handlers"
@@ -114,48 +128,57 @@ def validate_input(data):
 
         Path(handlers, "__init__.py").write_text('"""Request handlers."""')
 
-        Path(handlers, "http.py").write_text('''"""HTTP request handler."""
+        Path(handlers, "http.py").write_text(
+            '''"""HTTP request handler."""
 
 def handle_request(request):
     """Handle incoming HTTP request."""
     return {"status": 200, "body": "OK"}
-''')
+'''
+        )
 
         # Config directory
         config = Path(tmpdir, "config")
         config.mkdir()
 
-        Path(config, "settings.json").write_text('''{
+        Path(config, "settings.json").write_text(
+            """{
     "debug": true,
     "port": 8080
-}''')
+}"""
+        )
 
         # Tests directory
         tests = Path(tmpdir, "tests")
         tests.mkdir()
 
-        Path(tests, "conftest.py").write_text('''"""Pytest configuration."""
+        Path(tests, "conftest.py").write_text(
+            '''"""Pytest configuration."""
 import pytest
 
 @pytest.fixture
 def sample_data():
     return {"test": "data"}
-''')
+'''
+        )
 
-        Path(tests, "test_core.py").write_text('''"""Tests for core module."""
+        Path(tests, "test_core.py").write_text(
+            '''"""Tests for core module."""
 
 from testproject.core import process_data
 
 def test_process_data(sample_data):
     result = process_data(sample_data)
     assert result["status"] == "success"
-''')
+'''
+        )
 
         # Documentation
         docs = Path(tmpdir, "docs")
         docs.mkdir()
 
-        Path(docs, "api.md").write_text("""# API Documentation
+        Path(docs, "api.md").write_text(
+            """# API Documentation
 
 ## Core Functions
 
@@ -164,15 +187,18 @@ Processes input data and returns results.
 
 ### format_output(result)
 Formats results for display.
-""")
+"""
+        )
 
-        Path(docs, "development.md").write_text("""# Development Guide
+        Path(docs, "development.md").write_text(
+            """# Development Guide
 
 ## Setup
 1. Clone the repository
 2. Install dependencies
 3. Run tests
-""")
+"""
+        )
 
         # Build artifacts (should be skipped)
         build = Path(tmpdir, "build")
@@ -231,14 +257,22 @@ Formats results for display.
 
         # Assertions for config files
         config_files = results.get("config", [])
-        assert "setup.py" in config_files or "setup.py" in results.get("other", []), "Should find setup.py"
-        assert "requirements.txt" in config_files or "requirements.txt" in results.get("other", []), "Should find requirements"
+        assert "setup.py" in config_files or "setup.py" in results.get(
+            "other", []
+        ), "Should find setup.py"
+        assert "requirements.txt" in config_files or "requirements.txt" in results.get(
+            "other", []
+        ), "Should find requirements"
 
         # Should NOT find files in excluded directories
         all_files = [f for files in results.values() for f in files]
         assert not any(".venv/" in f or ".venv\\" in f for f in all_files), "Should not scan .venv"
-        assert not any("node_modules/" in f or "node_modules\\" in f for f in all_files), "Should not scan node_modules"
-        assert not any("build/" in f or "build\\" in f for f in all_files), "Should not scan build artifacts"
+        assert not any(
+            "node_modules/" in f or "node_modules\\" in f for f in all_files
+        ), "Should not scan node_modules"
+        assert not any(
+            "build/" in f or "build\\" in f for f in all_files
+        ), "Should not scan build artifacts"
         assert not any("dist/" in f or "dist\\" in f for f in all_files), "Should not scan dist"
 
         print("\n✅ Intelligent discovery correctly identified project structure")
@@ -265,26 +299,31 @@ def test_semantic_analyze_with_intelligent_discovery():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create minimal project
-        Path(tmpdir, "README.md").write_text("""# Minimal Test Project
+        Path(tmpdir, "README.md").write_text(
+            """# Minimal Test Project
 
 This project tests intelligent discovery in semantic analysis.
-""")
+"""
+        )
 
         pkg = Path(tmpdir, "example")
         pkg.mkdir()
 
         Path(pkg, "__init__.py").write_text('"""Example package."""')
 
-        Path(pkg, "main.py").write_text('''"""Main module."""
+        Path(pkg, "main.py").write_text(
+            '''"""Main module."""
 
 def run():
     """Run the application."""
     print("Running")
-''')
+'''
+        )
 
         # Run semantic-analyze
         # Create args object (can't use class due to scope issues with provider variable)
         from types import SimpleNamespace
+
         args = SimpleNamespace(
             root=tmpdir,
             verbose=True,
@@ -294,7 +333,7 @@ def run():
             api_key=None,  # Use from env
             output="semantic_index.json",  # Explicit output path
             provider=provider,
-            iterations=1
+            iterations=1,
         )
 
         print(f"\nRunning semantic-analyze with intelligent discovery")
@@ -315,8 +354,8 @@ def run():
         print(f"\n✅ Semantic analysis completed successfully")
 
         # Handle concepts as dictionary (concept_id -> concept_data)
-        concepts = index.get('concepts', {})
-        matches = index.get('matches', [])
+        concepts = index.get("concepts", {})
+        matches = index.get("matches", [])
 
         print(f"  - Concepts extracted: {len(concepts)}")
         print(f"  - Matches found: {len(matches)}")
@@ -327,8 +366,8 @@ def run():
         # Extract source files from concepts
         sources = set()
         for concept_id, concept_data in concepts.items():
-            if isinstance(concept_data, dict) and 'source' in concept_data:
-                sources.add(concept_data['source'])
+            if isinstance(concept_data, dict) and "source" in concept_data:
+                sources.add(concept_data["source"])
 
         print(f"  - Source files analyzed: {sorted(sources)}")
 

@@ -190,11 +190,13 @@ def test_parse_json_with_retry_validates_required_fields(monkeypatch):
 
 def test_request_json_parse_then_schema_retry_uses_correct_raw(monkeypatch):
     """Test that schema retry gets the parsed response, not the unparseable one."""
-    responses = iter([
-        "not valid json at all",  # First response - unparseable
-        '{"description": "parsed but incomplete"}',  # Parse retry - parseable but missing fields
-        '{"description": "complete", "keywords": ["test"]}',  # Schema retry - complete
-    ])
+    responses = iter(
+        [
+            "not valid json at all",  # First response - unparseable
+            '{"description": "parsed but incomplete"}',  # Parse retry - parseable but missing fields
+            '{"description": "complete", "keywords": ["test"]}',  # Schema retry - complete
+        ]
+    )
 
     client_obj, provider = make_stub_provider(send_return=lambda: next(responses))
     monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
@@ -218,7 +220,7 @@ def test_request_json_parse_then_schema_retry_uses_correct_raw(monkeypatch):
         max_tokens=500,
         log_context="test context",
         validator=lambda data: client._validate_doc_response(data, "test"),
-        schema_retry_builder=capture_schema_retry
+        schema_retry_builder=capture_schema_retry,
     )
 
     # The schema retry should have received the PARSED response, not the original unparseable one

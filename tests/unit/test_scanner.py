@@ -57,14 +57,14 @@ def test_intelligent_scanner_with_mocked_llm():
                     "scan_files": ["utils.py"],
                     "explore_subdirs": [],
                     "file_categories": {"utils.py": "code"},
-                    "reasoning": "Python source file"
+                    "reasoning": "Python source file",
                 }
             else:
                 response = {
                     "scan_files": ["main.py"],
                     "explore_subdirs": ["src"],
                     "file_categories": {"main.py": "code"},
-                    "reasoning": "Root Python file"
+                    "reasoning": "Root Python file",
                 }
 
             # Run through validator to mimic real behavior
@@ -119,7 +119,7 @@ def test_intelligent_scanner_handles_mixed_case_categories():
                 "scan_files": ["test.py"],
                 "explore_subdirs": [],
                 "file_categories": {"test.py": "Code"},  # Wrong case!
-                "reasoning": "test"
+                "reasoning": "test",
             }
             validated, _ = validator(response)
             return validated
@@ -146,7 +146,7 @@ def test_intelligent_scanner_handles_invalid_categories():
                 "scan_files": ["weird.file"],
                 "explore_subdirs": [],
                 "file_categories": {"weird.file": "random-category"},  # Invalid!
-                "reasoning": "test"
+                "reasoning": "test",
             }
             validated, _ = validator(response)
             return validated

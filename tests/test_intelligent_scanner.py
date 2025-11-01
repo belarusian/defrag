@@ -51,11 +51,8 @@ def test_intelligent_scanner_basic_structure():
                 return {
                     "scan_files": ["README.md", "setup.py"],
                     "explore_subdirs": ["src", "tests", "docs"],
-                    "file_categories": {
-                        "README.md": "documentation",
-                        "setup.py": "config"
-                    },
-                    "reasoning": "Scanning project files, exploring source dirs"
+                    "file_categories": {"README.md": "documentation", "setup.py": "config"},
+                    "reasoning": "Scanning project files, exploring source dirs",
                 }
             elif "Current directory: src/" in prompt:
                 return {
@@ -64,34 +61,30 @@ def test_intelligent_scanner_basic_structure():
                     "file_categories": {
                         "__init__.py": "code",
                         "main.py": "code",
-                        "utils.py": "code"
+                        "utils.py": "code",
                     },
-                    "reasoning": "Python source files"
+                    "reasoning": "Python source files",
                 }
             elif "Current directory: tests/" in prompt:
                 return {
                     "scan_files": ["test_main.py"],
                     "explore_subdirs": [],
-                    "file_categories": {
-                        "test_main.py": "code"
-                    },
-                    "reasoning": "Test files"
+                    "file_categories": {"test_main.py": "code"},
+                    "reasoning": "Test files",
                 }
             elif "Current directory: docs/" in prompt:
                 return {
                     "scan_files": ["guide.md"],
                     "explore_subdirs": [],
-                    "file_categories": {
-                        "guide.md": "documentation"
-                    },
-                    "reasoning": "Documentation"
+                    "file_categories": {"guide.md": "documentation"},
+                    "reasoning": "Documentation",
                 }
             else:
                 return {
                     "scan_files": [],
                     "explore_subdirs": [],
                     "file_categories": {},
-                    "reasoning": "Nothing to scan"
+                    "reasoning": "Nothing to scan",
                 }
 
         mock_llm._request_json.side_effect = mock_request_json
@@ -152,7 +145,7 @@ def test_intelligent_scanner_handles_deep_nesting():
                 "scan_files": [],
                 "explore_subdirs": [f"level{i}" for i in range(10)],
                 "file_categories": {},
-                "reasoning": "Exploring"
+                "reasoning": "Exploring",
             }
 
         mock_llm._request_json.side_effect = always_explore
@@ -219,61 +212,48 @@ def test_intelligent_scanner_real_project_simulation():
                     "file_categories": {
                         "README.md": "documentation",
                         "setup.py": "config",
-                        "requirements.txt": "config"
+                        "requirements.txt": "config",
                     },
-                    "reasoning": "Main project files and directories"
+                    "reasoning": "Main project files and directories",
                 }
             elif "mypackage" in log_context and "submodule" in prompt:
                 # Package directory
                 return {
                     "scan_files": ["__init__.py", "core.py", "api.py"],
                     "explore_subdirs": ["submodule"],
-                    "file_categories": {
-                        "__init__.py": "code",
-                        "core.py": "code",
-                        "api.py": "code"
-                    },
-                    "reasoning": "Python package files"
+                    "file_categories": {"__init__.py": "code", "core.py": "code", "api.py": "code"},
+                    "reasoning": "Python package files",
                 }
             elif "submodule" in log_context:
                 # Submodule
                 return {
                     "scan_files": ["__init__.py", "worker.py"],
                     "explore_subdirs": [],
-                    "file_categories": {
-                        "__init__.py": "code",
-                        "worker.py": "code"
-                    },
-                    "reasoning": "Submodule files"
+                    "file_categories": {"__init__.py": "code", "worker.py": "code"},
+                    "reasoning": "Submodule files",
                 }
             elif "tests" in log_context:
                 # Tests
                 return {
                     "scan_files": ["conftest.py", "test_core.py"],
                     "explore_subdirs": [],
-                    "file_categories": {
-                        "conftest.py": "code",
-                        "test_core.py": "code"
-                    },
-                    "reasoning": "Test files"
+                    "file_categories": {"conftest.py": "code", "test_core.py": "code"},
+                    "reasoning": "Test files",
                 }
             elif "docs" in log_context:
                 # Documentation
                 return {
                     "scan_files": ["index.md", "api.md"],
                     "explore_subdirs": [],
-                    "file_categories": {
-                        "index.md": "documentation",
-                        "api.md": "documentation"
-                    },
-                    "reasoning": "Documentation files"
+                    "file_categories": {"index.md": "documentation", "api.md": "documentation"},
+                    "reasoning": "Documentation files",
                 }
             else:
                 return {
                     "scan_files": [],
                     "explore_subdirs": [],
                     "file_categories": {},
-                    "reasoning": "Nothing relevant"
+                    "reasoning": "Nothing relevant",
                 }
 
         mock_llm._request_json.side_effect = intelligent_response

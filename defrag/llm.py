@@ -173,11 +173,17 @@ class LLMClient:
 
         cleaned = text
         if cleaned.startswith("```"):
-            parts = cleaned.split("```")
-            if len(parts) >= 3:
-                cleaned = parts[1]
-                if "\n" in cleaned:
-                    cleaned = cleaned.split("\n", 1)[1]
+            # Drop the opening fence (handles optional language identifier).
+            first_newline = cleaned.find("\n")
+            if first_newline != -1:
+                cleaned = cleaned[first_newline + 1 :]
+            else:
+                cleaned = ""
+
+            # Remove the trailing fence while preserving interior code fences.
+            last_fence = cleaned.rfind("```")
+            if last_fence != -1 and cleaned[last_fence:].strip("`\n\r ") == "":
+                cleaned = cleaned[:last_fence]
 
         cleaned = cleaned.strip()
         if not cleaned:

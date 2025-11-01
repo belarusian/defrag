@@ -108,19 +108,28 @@ class LLMClient:
         try:
             parsed = self._parse_json_content(raw)
         except ValueError as parse_error:
-            logger.warning("%s - JSON parse failed: %s", log_context, parse_error)
+            logger.warning(
+                "%s - JSON parse failed: %s. Raw=%s",
+                log_context,
+                parse_error,
+                self._truncate(raw),
+            )
             retry_prompt = self._build_parse_retry_prompt(parse_error, raw)
             logger.debug("Retrying with parse correction prompt: %s", retry_prompt[:500])
             raw_retry = self._send_prompt(retry_prompt, max_tokens=max_tokens)
             logger.debug("Parse retry raw response: %s", raw_retry[:500])
             parsed = self._parse_json_content(raw_retry)
-            # Update raw to the successfully parsed response for potential schema retry
             raw = raw_retry
 
         normalized, issues = validator(parsed)
 
         if issues:
-            logger.warning("%s - response missing required fields: %s", log_context, issues)
+            logger.warning(
+                "%s - response missing required fields: %s. Raw=%s",
+                log_context,
+                issues,
+                self._truncate(raw),
+            )
             retry_prompt = schema_retry_builder(parsed, issues, raw)
             logger.debug("Retrying with schema correction prompt: %s", retry_prompt[:500])
             raw_retry = self._send_prompt(retry_prompt, max_tokens=max_tokens)
@@ -128,6 +137,12 @@ class LLMClient:
             parsed_retry = self._parse_json_content(raw_retry)
             normalized, issues = validator(parsed_retry)
             if issues:
+                logger.error(
+                    "%s - invalid response after retry: %s. Raw=%s",
+                    log_context,
+                    "; ".join(f"entry {issue['index']}: {issue['error']}" for issue in issues),
+                    self._truncate(raw_retry),
+                )
                 raise ValueError(
                     "%s - invalid response after retry: %s"
                     % (
@@ -137,6 +152,14 @@ class LLMClient:
                 )
 
         return normalized
+
+    @staticmethod
+    def _truncate(value: Optional[str], length: int = 400) -> str:
+        if not value:
+            return ""
+        if len(value) <= length:
+            return value
+        return value[:length] + "...(truncated)"
 
     def _parse_json_content(self, raw_text: str) -> any:
         """Parse JSON text, allowing for markdown fences."""

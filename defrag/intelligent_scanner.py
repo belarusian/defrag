@@ -25,7 +25,7 @@ class IntelligentScanner:
             "code": [],
             "documentation": [],
             "config": [],
-            "other": []
+            "other": [],
         }
 
     def scan(self, max_depth: int = 10, verbose: bool = False) -> Dict[str, List[str]]:
@@ -119,7 +119,7 @@ class IntelligentScanner:
         return {
             "path": str(dir_path.relative_to(self.root_dir)),
             "files": files,
-            "subdirs": subdirs
+            "subdirs": subdirs,
         }
 
     def _ask_llm_what_to_scan(self, structure: Dict, rel_path: str) -> Dict:
@@ -161,7 +161,7 @@ Respond with JSON only."""
                 validator=lambda data: self._validate_scan_response(data, structure),
                 schema_retry_builder=lambda parsed, issues, raw: self._build_scan_retry_prompt(
                     structure, issues, raw
-                )
+                ),
             )
             return response
         except Exception as e:
@@ -210,7 +210,7 @@ Respond with JSON only."""
             "scan_files": validated_scan_files,
             "explore_subdirs": validated_subdirs,
             "file_categories": file_categories,
-            "reasoning": data.get("reasoning", "")
+            "reasoning": data.get("reasoning", ""),
         }
 
         return normalized, issues
@@ -245,12 +245,12 @@ JSON only."""
         file_categories = {}
 
         # Common code extensions
-        code_exts = {'.py', '.js', '.ts', '.java', '.go', '.rs', '.cpp', '.c', '.h', '.rb', '.php'}
-        doc_exts = {'.md', '.rst', '.txt'}
-        config_names = {'setup.py', 'package.json', 'requirements.txt', 'Dockerfile', 'Makefile'}
+        code_exts = {".py", ".js", ".ts", ".java", ".go", ".rs", ".cpp", ".c", ".h", ".rb", ".php"}
+        doc_exts = {".md", ".rst", ".txt"}
+        config_names = {"setup.py", "package.json", "requirements.txt", "Dockerfile", "Makefile"}
 
-        for file_info in structure['files']:
-            name = file_info['name']
+        for file_info in structure["files"]:
+            name = file_info["name"]
             ext = Path(name).suffix
 
             if ext in code_exts:
@@ -265,25 +265,35 @@ JSON only."""
 
         # Explore subdirs that don't look like dependencies
         exclude_dirs = {
-            'node_modules', '.venv', 'venv', '__pycache__', '.git',
-            'build', 'dist', '.pytest_cache', '.tox', '.eggs'
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__",
+            ".git",
+            "build",
+            "dist",
+            ".pytest_cache",
+            ".tox",
+            ".eggs",
         }
 
         explore_subdirs = []
-        for subdir_info in structure['subdirs']:
-            name = subdir_info['name']
-            if name not in exclude_dirs and not name.startswith('.'):
+        for subdir_info in structure["subdirs"]:
+            name = subdir_info["name"]
+            if name not in exclude_dirs and not name.startswith("."):
                 explore_subdirs.append(name)
 
         return {
             "scan_files": scan_files,
             "explore_subdirs": explore_subdirs,
             "file_categories": file_categories,
-            "reasoning": "Fallback heuristics used"
+            "reasoning": "Fallback heuristics used",
         }
 
 
-def scan_intelligently(llm_client, root_dir: str = ".", verbose: bool = False) -> Dict[str, List[str]]:
+def scan_intelligently(
+    llm_client, root_dir: str = ".", verbose: bool = False
+) -> Dict[str, List[str]]:
     """
     Convenience function to scan a directory tree intelligently.
 

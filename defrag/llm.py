@@ -94,15 +94,19 @@ class LLMClient:
 
     def generate_text(self, prompt: str, max_tokens: int = 2000) -> str:
         """Generate free-form text response from the provider."""
+        log_context = "generate_text"
+        logger.debug("%s - prompt: %s", log_context, self._truncate(prompt))
         response = self._send_prompt(prompt, max_tokens=max_tokens)
+        logger.debug("%s - raw response: %s", log_context, self._truncate(response))
         return (response or "").strip()
 
     def _request_json(
         self, prompt: str, max_tokens: int, log_context: str, validator, schema_retry_builder
     ):
         """Send prompt, validate structured JSON, and retry once if needed."""
-        logger.debug(log_context)
+        logger.debug("%s - prompt: %s", log_context, self._truncate(prompt))
         raw = self._send_prompt(prompt, max_tokens=max_tokens)
+        logger.debug("%s - raw response: %s", log_context, self._truncate(raw))
         logger.debug("%s - API call succeeded", log_context)
 
         try:

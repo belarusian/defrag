@@ -27,7 +27,7 @@ class IntelligentScanner:
             "other": [],
         }
 
-    def scan(self, max_depth: int = 10, verbose: bool = False) -> Dict[str, List[str]]:
+    def scan(self, max_depth: int = 50, verbose: bool = False) -> Dict[str, List[str]]:
         """
         Intelligently scan directory tree using LLM guidance.
 

@@ -13,6 +13,14 @@
 
 **LLM-powered documentation validation: semantic understanding + physical link grounding. Auto-fixes missing references.**
 
+
+See `defrag/validator.py:112-138` - This section describes a system for defragmenting documentation using semantic analysis and link validation to automatically fix missing references, which aligns closely with the code concept of suggesting fixes for invalid code references in documentation.
+
+See `defrag/fixer.py:103-185` - This section describes a system for defragmenting documentation using semantic analysis and link validation to automatically fix missing references, which aligns closely with the code concept of auto-fixing missing references using a semantic index.
+
+See `defrag/fixer.py:188-235` - The code concept of automatically fixing document references using a semantic index aligns closely with the description of defragmenting documentation using semantic analysis and link validation.
+
+See `defrag/scanner.py:109-144` - The code concept involves scanning documentation for code references and validating them, which aligns with the description of defragmenting documentation using semantic analysis and link validation.
 ## The Problem
 
 Documentation rots. Code changes. Links break. Traditional tools only check if references exist, but can't tell if the documentation actually explains what the code does.
@@ -44,6 +52,8 @@ Defrag uses **two-layer validation**:
 
 **Together**: Identify accurate docs, outdated docs, missing links, and true orphans.
 
+See `defrag/analyzer.py:222-276` - This section explains Defrag's two-layer validation process for ensuring the accuracy and relevance of documentation by using semantic understanding and physical validation.
+
 ## Quick Start
 
 ### Installation
@@ -69,6 +79,8 @@ pip install -e ".[dev]"
 
 ### Basic Usage
 
+
+See `defrag/llm.py:375-409` - The documentation section describes a process that involves responding with a JSON object containing a description and keywords, which aligns with the code concept of extracting semantic concepts and returning a JSON object.
 ```bash
 # Physical validation (fast, no LLM)
 defrag index                    # Catalog documentation
@@ -77,6 +89,8 @@ defrag report                   # Show status
 
 # Semantic analysis (set provider + API key)
 # Anthropic Claude (default):
+
+See `defrag/llm.py:786-808` - This section explains how to set the API key for Anthropic Claude, which is relevant to the code concept of interacting with the Anthropic Claude API.
 export ANTHROPIC_API_KEY=your_key_here
 # OpenAI (defaults to gpt-5-mini-2025-08-07):
 # export DEFRAG_LLM_PROVIDER=openai
@@ -87,11 +101,17 @@ defrag semantic-analyze --verbose        # Full analysis
 defrag semantic-report --show-gc         # View results
 defrag semantic-validate --verbose       # Check discrepancies
 
+See `defrag/analyzer.py:36-46` - This section provides commands for performing a semantic analysis, viewing results, and validating discrepancies using the defrag tool, with an optional model override, which aligns with the code concept of initializing an analyzer for semantic analysis with an optional LLM client.
+
 # Auto-fix missing links
 defrag semantic-fix --doc README.md --preview  # Preview
 defrag semantic-fix --doc README.md --apply    # Apply
 ```
 
+
+See `defrag/fixer.py:103-185` - This section explains how to preview and apply automatic fixes for missing links in a README.md document using the defrag tool, which is directly related to the code concept of auto-fixing missing references.
+
+See `defrag/fixer.py:188-235` - The code concept includes auto-fixing document references, which matches the description of previewing and applying automatic fixes for missing links in a README.md document.
 ## How It Works
 
 ### Example
@@ -147,6 +167,8 @@ Match     Med    0.75    0.60     0.40
 - **Low semantic + valid physical = Wrong model?** (0.50) - Physical link exists but semantic match weak
 - **Low semantic + no physical = GC candidate** (0.30) - No connection to codebase
 
+See `defrag/analyzer.py:299-338` - This section explains the confidence levels of semantic matches between documentation and physical code links, which is relevant to the code concept's focus on confidence thresholds and validated matches.
+
 ## Use Cases
 
 1. **Onboarding**: Quickly find which docs are accurate
@@ -169,8 +191,28 @@ defrag report                             # Show report
 defrag gc --show                          # Show GC candidates
 ```
 
+See `defrag/cli.py:24-30` - This section provides commands for managing and validating documentation indices and statuses, which aligns with the code concept of initializing or rebuilding a documentation index.
+
+See `defrag/cli.py:42-105` - The code concept involves validating documentation against code and updating their status based on identified issues, which aligns closely with the documentation section that provides commands for managing and validating documentation indices and statuses.
+
+See `defrag/cli.py:108-135` - The documentation section provides commands for managing and validating documentation indices and statuses, which aligns with the code concept of updating documentation status in an index.
+
+See `defrag/cli.py:174-211` - The code concept involves generating a report on document status in an index, which aligns with managing and validating documentation indices and statuses.
+
+See `defrag/cli.py:214-300` - This section provides commands for managing and validating documentation indices and statuses, which is relevant to the code concept of a CLI tool with commands to index, scan, validate, and mark documentation.
+
+See `defrag/indexer.py:20-71` - This section provides commands for managing and validating documentation indices and statuses, which aligns with the code concept of building or updating a documentation index by scanning a directory for documentation files.
+
+See `defrag/indexer.py:127-152` - The code concept involves updating the status and related information of a document within an index, which aligns with managing and validating documentation indices and statuses.
+
 ### Semantic Layer (LLM-Powered)
 
+
+See `defrag/refiner.py:98-110` - The section explains the use of a semantic layer powered by a large language model (LLM), which aligns with the code concept of using an LLM client for codebase refinement.
+
+See `defrag/analyzer.py:36-46` - This section explains the use of a semantic layer powered by a large language model (LLM), which is relevant to the code concept involving semantic analysis and an optional LLM client.
+
+See `defrag/analyzer.py:153-220` - The code concept involves matching code and documentation concepts using a language model, which aligns with the documentation section explaining the use of a semantic layer powered by a large language model (LLM).
 ```bash
 # Requires provider + API key (ANTHROPIC_API_KEY or OPENAI_API_KEY)
 

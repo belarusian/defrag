@@ -435,8 +435,8 @@ Respond with JSON containing:
             ),
         )
 
-        # Build final document with proper structure
-        content = f"# {response['title']}\n\n{response['content']}"
+        # Use the content as provided by the model
+        content = response['content']
 
         # Add implementation references section
         if concepts:

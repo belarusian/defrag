@@ -4,9 +4,8 @@ Test intelligent file discovery using LLM guidance.
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-import pytest
 
 from defrag.intelligent_scanner import IntelligentScanner
 
@@ -152,7 +151,7 @@ def test_intelligent_scanner_handles_deep_nesting():
 
         # Run with max_depth=3
         scanner = IntelligentScanner(mock_llm, tmpdir)
-        results = scanner.scan(max_depth=3, verbose=False)
+        scanner.scan(max_depth=3, verbose=False)
 
         # Should only go 3 levels deep
         assert len(scanner.visited_dirs) <= 4  # root + 3 levels

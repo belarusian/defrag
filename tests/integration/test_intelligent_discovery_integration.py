@@ -278,7 +278,7 @@ Formats results for display.
         print("\n✅ Intelligent discovery correctly identified project structure")
         print(f"  - Found {len(code_files)} code files")
         print(f"  - Found {len(doc_files)} documentation files")
-        print(f"  - Correctly excluded dependency and build directories")
+        print("  - Correctly excluded dependency and build directories")
 
         # Save results for inspection
         results_file = Path(tmpdir, "discovery_results.json")
@@ -336,12 +336,12 @@ def run():
             iterations=1,
         )
 
-        print(f"\nRunning semantic-analyze with intelligent discovery")
+        print("\nRunning semantic-analyze with intelligent discovery")
         print(f"Root: {tmpdir}")
         print(f"Provider: {provider}")
 
         # Run the command
-        result = cmd_semantic_analyze(args)
+        cmd_semantic_analyze(args)
 
         # Check that semantic index was created
         index_path = Path(tmpdir, "semantic_index.json")
@@ -351,7 +351,7 @@ def run():
         with open(index_path) as f:
             index = json.load(f)
 
-        print(f"\n✅ Semantic analysis completed successfully")
+        print("\n✅ Semantic analysis completed successfully")
 
         # Handle concepts as dictionary (concept_id -> concept_data)
         concepts = index.get("concepts", {})

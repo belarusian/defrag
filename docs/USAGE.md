@@ -127,6 +127,24 @@ python -m tools.defrag semantic-analyze \
   --verbose
 ```
 
+### Running Integration Tests (LLM Required)
+
+```bash
+# Default provider is Anthropic unless DEFRAG_LLM_PROVIDER is set
+export ANTHROPIC_API_KEY=your_key_here
+# Optional overrides:
+# export DEFRAG_LLM_PROVIDER=openai
+# export OPENAI_API_KEY=your_key_here
+# export DEFRAG_LLM_MODEL=gpt-4o            # defaults to claude-sonnet-4-5-20250929 for Anthropic
+
+# Run semantic pipeline integration suite with verbose logging
+pytest tests/integration -vv \
+  --log-cli-level=INFO \
+  --log-cli-format='%(levelname)s %(name)s:%(lineno)d %(message)s'
+```
+
+Use `--log-cli-level=DEBUG` for even more detail, and remember that each provider's environment variable must be available to the test process.
+
 ## Index Schema
 
 ```yaml

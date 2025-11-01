@@ -205,7 +205,7 @@ class SemanticAnalyzer:
                     code_concept_id=code_concept.id,
                     doc_concept_id=doc_concept.id,
                     confidence=match["confidence"],
-                    reasoning=match["reasoning"],
+                    reasoning=match.get("reasoning", ""),
                     suggested_link=suggested_link,
                     context_needed=match.get("context_needed"),
                     iterations=match.get("iterations", 1),

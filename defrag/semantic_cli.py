@@ -92,7 +92,14 @@ def cmd_semantic_analyze(args):
     print("[2/4] Discovering code files intelligently...")
 
     # Use intelligent scanner to discover files
-    discovered_files = scan_intelligently(llm, args.root, verbose=args.verbose)
+    max_depth = args.max_depth if hasattr(args, "max_depth") else 50
+    # Convert 0 to None for unlimited depth
+    if max_depth == 0:
+        max_depth = None
+    max_files = args.max_files if hasattr(args, "max_files") else 10000
+    discovered_files = scan_intelligently(
+        llm, args.root, max_depth=max_depth, max_files=max_files, verbose=args.verbose
+    )
 
     # Get code files to analyze
     code_paths = discovered_files.get("code", [])
@@ -391,6 +398,15 @@ def add_semantic_commands(subparsers, parent_parser):
     parser_analyze.add_argument("--limit-docs", type=int, help="Limit number of docs (for testing)")
     parser_analyze.add_argument(
         "--limit-code", type=int, help="Limit number of code files (for testing)"
+    )
+    parser_analyze.add_argument(
+        "--max-depth",
+        type=int,
+        default=50,
+        help="Maximum directory depth for discovery (default: 50, use 0 for unlimited)",
+    )
+    parser_analyze.add_argument(
+        "--max-files", type=int, default=10000, help="Maximum files to discover (default: 10000)"
     )
     parser_analyze.add_argument("--verbose", action="store_true", help="Verbose output")
 

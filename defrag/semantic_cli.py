@@ -4,7 +4,6 @@ Semantic CLI commands for defrag tool.
 Commands for LLM-based semantic analysis.
 """
 
-import glob
 import os
 
 from .analyzer import SemanticAnalyzer
@@ -100,7 +99,7 @@ def cmd_semantic_analyze(args):
 
     # Also show what was discovered
     if args.verbose:
-        print(f"\nDiscovered files by category:")
+        print("\nDiscovered files by category:")
         for category, files in discovered_files.items():
             if files:
                 print(f"  {category}: {len(files)} files")

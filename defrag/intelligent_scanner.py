@@ -5,7 +5,6 @@ Instead of hardcoded patterns, the LLM decides what to scan based on
 the actual directory structure and file names.
 """
 
-import os
 import json
 from pathlib import Path
 from typing import List, Dict, Set, Tuple
@@ -106,14 +105,14 @@ class IntelligentScanner:
                 try:
                     size = entry.stat().st_size
                     files.append({"name": name, "size": size})
-                except:
+                except (OSError, PermissionError):
                     files.append({"name": name, "size": 0})
             elif entry.is_dir():
                 # Count items in subdir (without recursing)
                 try:
                     item_count = len(list(entry.iterdir()))
                     subdirs.append({"name": name, "items": item_count})
-                except:
+                except (OSError, PermissionError):
                     subdirs.append({"name": name, "items": 0})
 
         return {

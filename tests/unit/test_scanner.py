@@ -4,9 +4,8 @@ Unit tests for document and code scanning functions.
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-import pytest
 
 from defrag.scanner import scan_documentation
 from defrag.intelligent_scanner import IntelligentScanner

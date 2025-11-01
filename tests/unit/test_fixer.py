@@ -95,3 +95,29 @@ def test_fix_document_references_fallback_mechanical(tmp_path):
     updated = doc_file.read_text()
     assert "See `module.py:10-20`" in updated
     assert any("Added reference" in change for change in changes)
+
+
+def test_unsafe_rewrite_triggers_fallback(tmp_path):
+    doc_path = "docs/guide.md"
+    section = "Overview"
+    index = build_index(doc_path, section)
+
+    doc_file = tmp_path / "docs" / "guide.md"
+    doc_file.parent.mkdir(parents=True)
+    doc_file.write_text("# Overview\n\nExisting overview content.\n")
+
+    mock_llm = Mock()
+    mock_llm.generate_text.return_value = "# Overview"  # Too short, fails safety check
+
+    changes = fix_document_references(
+        doc_path,
+        index,
+        mock_llm,
+        root_dir=tmp_path,
+        dry_run=False,
+        verbose=False,
+    )
+
+    updated = doc_file.read_text()
+    assert "See `module.py:10-20`" in updated
+    assert any("Added reference" in change for change in changes)

@@ -12,6 +12,41 @@ from .llm import LLMClient
 from .semantic import Concept, SemanticIndex
 
 
+def _extract_headings(markdown: str) -> set:
+    headings = set()
+    for line in markdown.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            title = stripped.lstrip("#").strip()
+            if title:
+                headings.add(title.lower())
+    return headings
+
+
+def _is_rewrite_safe(original: str, rewritten: str) -> bool:
+    orig_text = original.strip()
+    new_text = rewritten.strip()
+
+    if not new_text:
+        return False
+
+    orig_len = len(orig_text)
+    new_len = len(new_text)
+
+    if orig_len > 0:
+        min_required = max(50, int(orig_len * 0.7))
+        if new_len < min_required:
+            return False
+
+    orig_headings = _extract_headings(orig_text)
+    new_headings = _extract_headings(new_text)
+
+    if orig_headings and not orig_headings.issubset(new_headings):
+        return False
+
+    return True
+
+
 def _clean_markdown_output(text: str) -> str:
     """Strip surrounding code fences and whitespace from LLM output."""
     cleaned = (text or "").strip()
@@ -29,7 +64,7 @@ def rewrite_document_with_llm(
     original_content: str,
     matches_payload: List[dict],
     llm: LLMClient,
-    max_tokens: int = 3000,
+    max_tokens: int = 8000,
     verbose: bool = False,
 ) -> Optional[str]:
     """Ask the LLM to intelligently merge references into documentation."""
@@ -70,8 +105,17 @@ def rewrite_document_with_llm(
 
     prompt = "\n".join(prompt_lines)
 
+    # Dynamically adjust max_tokens based on document size
+    # Estimate needed tokens: original content + 50% for additions
+    content_tokens_estimate = len(original_content) // 3  # rough char-to-token ratio
+    needed_tokens = int(content_tokens_estimate * 1.5)
+    actual_max_tokens = max(max_tokens, min(needed_tokens, 16000))  # cap at 16k
+
+    if verbose:
+        print(f"    Document size: {len(original_content)} chars, using {actual_max_tokens} max tokens")
+
     try:
-        response = llm.generate_text(prompt, max_tokens=max_tokens)
+        response = llm.generate_text(prompt, max_tokens=actual_max_tokens)
     except Exception as exc:
         if verbose:
             print(f"    LLM rewrite failed for {doc_path}: {exc}")
@@ -81,6 +125,20 @@ def rewrite_document_with_llm(
     if not cleaned:
         if verbose:
             print(f"    LLM rewrite returned empty content for {doc_path}")
+        return None
+
+    if not _is_rewrite_safe(original_content, cleaned):
+        if verbose:
+            orig_len = len(original_content.strip())
+            new_len = len(cleaned.strip())
+            print(
+                f"    LLM rewrite rejected for {doc_path}: failed safety checks"
+            )
+            print(f"      Original: {orig_len} chars, Rewritten: {new_len} chars")
+            if new_len < orig_len * 0.7:
+                print(f"      Reason: Output too short (less than 70% of original)")
+            else:
+                print(f"      Reason: Missing critical headings")
         return None
 
     return cleaned

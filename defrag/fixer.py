@@ -310,6 +310,20 @@ def _rewrite_large_document(
                 print("    Chunk rewrite failed safety check; aborting")
             return None, {}
 
+        missing_refs = [
+            item["code_reference"]
+            for item in chunk_matches
+            if item["code_reference"] not in updated_chunk
+        ]
+        if missing_refs:
+            if verbose:
+                print(
+                    "    Chunk rewrite missing references: "
+                    + ", ".join(missing_refs)
+                    + "; aborting chunked rewrite"
+                )
+            return None, {}
+
         current_doc_chunks.append(updated_chunk)
         previous_summary = response.get("summary_for_next", "")
         anything_changed = True

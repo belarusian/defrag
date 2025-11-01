@@ -7,7 +7,8 @@ Commands for LLM-based semantic analysis.
 import os
 
 from .analyzer import SemanticAnalyzer
-from .fixer import fix_document_references, fix_all_documents, preview_fix
+from .autodoc import generate_conceptual_docs_for_undocumented_code
+from .fixer import fix_all_documents
 from .llm import LLMClient
 from .progress import ProgressTracker
 from .scanner import scan_documentation
@@ -302,7 +303,7 @@ def cmd_semantic_validate(args):
 
 
 def cmd_semantic_fix(args):
-    """Auto-fix missing physical links in documentation."""
+    """Fix the disconnect between code and documentation."""
     index_path = _resolve_index_path(args.semantic_index, args.root)
     try:
         index = SemanticIndex.load(index_path)
@@ -311,49 +312,81 @@ def cmd_semantic_fix(args):
         print("Run 'semantic-analyze' first to build the index")
         return 1
 
-    if args.preview:
-        # Show preview without making changes
-        if args.doc:
-            preview = preview_fix(args.doc, index, args.root)
-            print(preview)
-        else:
-            print("Error: --preview requires --doc")
-            return 1
-        return 0
+    print("=== Fixing Documentation Disconnect ===")
+    if not args.apply:
+        print("[DRY RUN] Use --apply to write changes\n")
 
-    if args.doc:
-        # Fix specific document
-        print(f"Fixing {args.doc}...")
-        if not args.apply:
-            print("[DRY RUN] Use --apply to write changes\n")
+    # Part 1: Fix existing documentation (add missing links)
+    print("Step 1: Fixing missing links in existing documentation...")
+    all_changes = fix_all_documents(
+        index,
+        args.root,
+        dry_run=not args.apply,
+        min_confidence=args.min_confidence,
+        verbose=False,
+    )
 
-        changes = fix_document_references(
-            args.doc, index, args.root, dry_run=not args.apply, verbose=True
-        )
-
-        if changes:
-            print(f"\n{'Applied' if args.apply else 'Would apply'} {len(changes)} fixes")
-        else:
-            print("\nNo fixes needed")
-
-    else:
-        # Fix all documents
-        print("Fixing all documents...")
-        if not args.apply:
-            print("[DRY RUN] Use --apply to write changes\n")
-
-        all_changes = fix_all_documents(
-            index,
-            args.root,
-            dry_run=not args.apply,
-            min_confidence=args.min_confidence,
-            verbose=True,
-        )
-
-        total_changes = sum(len(changes) for changes in all_changes.values())
+    link_fixes = sum(len(changes) for changes in all_changes.values())
+    if link_fixes:
         print(
-            f"\n{'Applied' if args.apply else 'Would apply'} {total_changes} fixes across {len(all_changes)} documents"
+            f"  {'Fixed' if args.apply else 'Would fix'} {link_fixes} missing links in {len(all_changes)} documents"
         )
+    else:
+        print("  No missing links to fix")
+
+    # Part 2: Generate conceptual documentation for undocumented code
+    print("\nStep 2: Generating conceptual documentation for undocumented code...")
+
+    # Initialize LLM for doc generation
+    provider = (args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR, "anthropic")).lower()
+    try:
+        llm = LLMClient(
+            model=args.model,
+            provider=provider,
+            api_key=args.api_key,
+            root_dir=args.root,
+        )
+    except Exception as e:
+        print(f"Error initializing LLM client: {e}")
+        key_env = LLMClient.PROVIDER_KEY_ENVS.get(provider)
+        if key_env:
+            print(f"\nHint: Set {key_env} environment variable or pass --api-key")
+        return 1
+
+    # Generate conceptual docs for undocumented code
+    generated_docs = generate_conceptual_docs_for_undocumented_code(
+        index,
+        llm,
+        args.root,
+        min_confidence=args.min_confidence,
+        dry_run=not args.apply,
+        verbose=False,
+    )
+
+    if generated_docs:
+        doc_count = len(generated_docs)
+        action = "Generated" if args.apply else "Would generate"
+        print(f"  {action} {doc_count} conceptual documentation file(s):")
+        for doc_path in sorted(generated_docs.keys()):
+            print(f"    - {doc_path}")
+    else:
+        print("  All code is already documented")
+
+    # Summary
+    print("\n=== Summary ===")
+    if link_fixes or generated_docs:
+        action = "Fixed" if args.apply else "Would fix"
+        print(f"{action} documentation disconnect:")
+        if link_fixes:
+            print(
+                f"  - {'Added' if args.apply else 'Would add'} {link_fixes} missing code references"
+            )
+        if generated_docs:
+            print(
+                f"  - {'Created' if args.apply else 'Would create'} {len(generated_docs)} conceptual documentation files"
+            )
+    else:
+        print("Documentation and code are in sync - no fixes needed")
 
     return 0
 
@@ -422,17 +455,31 @@ def add_semantic_commands(subparsers, parent_parser):
     # semantic-fix command
     parser_fix = subparsers.add_parser(
         "semantic-fix",
-        help="Auto-fix missing physical links in documentation",
+        help="Fix the disconnect between code and documentation",
         parents=[parent_parser],
     )
     parser_fix.add_argument(
         "--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file"
     )
-    parser_fix.add_argument("--doc", help="Fix specific document (default: all)")
     parser_fix.add_argument("--apply", action="store_true", help="Apply changes (default: dry run)")
-    parser_fix.add_argument("--preview", action="store_true", help="Preview fixes without applying")
     parser_fix.add_argument(
-        "--min-confidence", type=float, default=0.7, help="Minimum confidence to fix (default: 0.7)"
+        "--min-confidence",
+        type=float,
+        default=0.7,
+        help="Minimum confidence threshold (default: 0.7)",
+    )
+    parser_fix.add_argument(
+        "--provider",
+        choices=sorted(LLMClient.SUPPORTED_PROVIDERS),
+        help="LLM provider (default: env DEFRAG_LLM_PROVIDER or anthropic)",
+    )
+    parser_fix.add_argument(
+        "--model",
+        help="LLM model (defaults per provider)",
+    )
+    parser_fix.add_argument(
+        "--api-key",
+        help="API key for LLM provider",
     )
 
     return {

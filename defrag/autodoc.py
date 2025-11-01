@@ -129,9 +129,30 @@ Example response:
 
         # Convert IDs back to Concept objects
         id_to_concept = {c.id: c for c in undocumented_concepts}
-        clusters = {}
+        clusters: Dict[str, List[Concept]] = {}
+        assigned_ids = set()
+
         for theme, concept_ids in response["clusters"].items():
-            clusters[theme] = [id_to_concept[cid] for cid in concept_ids if cid in id_to_concept]
+            matched_concepts = [id_to_concept[cid] for cid in concept_ids if cid in id_to_concept]
+            if matched_concepts:
+                clusters[theme] = matched_concepts
+                assigned_ids.update(c.id for c in matched_concepts)
+            else:
+                # Surface empty clusters so we can flag the LLM output as needing review
+                clusters[f"{theme} (needs-review)"] = []
+
+        # Capture concepts that never appeared in any cluster.
+        # Instead of emitting heuristics, gather deterministic context so we can ask the model again.
+        unassigned = [concept for concept in undocumented_concepts if concept.id not in assigned_ids]
+        if unassigned:
+            clusters["UNASSIGNED_CONCEPTS"] = unassigned
+
+            clusters["RECLUSTERING_PROMPT"] = (
+                "Some concepts were not grouped by the previous response. "
+                "Please analyze the UNASSIGNED_METADATA list and return an updated JSON with "
+                "'clusters' mapping semantic themes to concept IDs. "
+                "Only include concepts that remain truly unclustered under UNASSIGNED_CONCEPTS."
+            )
 
         return clusters
 
@@ -338,6 +359,12 @@ JSON only."""
 
         # Generate conceptual doc for each cluster
         for theme, concepts in clusters.items():
+            # Skip non-concept entries (metadata, prompts, placeholders)
+            if not concepts or not all(isinstance(c, Concept) for c in concepts):
+                if verbose:
+                    print(f"  Skipping cluster '{theme}' (no concrete concepts to document)")
+                continue
+
             if verbose:
                 print(f"\nGenerating documentation for: {theme}")
 
@@ -460,9 +487,11 @@ def generate_conceptual_docs_for_undocumented_code(
     # Find undocumented code
     code_concepts = semantic_index.get_code_concepts()
     matched_code_ids = {
-        m.code_concept_id for m in semantic_index.matches if m.confidence >= min_confidence
-    }
-    undocumented = [c for c in code_concepts if c.id not in matched_code_ids]
+            m.code_concept_id for m in semantic_index.matches if m.confidence >= min_confidence
+        }
+    undocumented = [
+            c for c in code_concepts if isinstance(c, Concept) and c.id not in matched_code_ids
+        ]
 
     if not undocumented:
         if verbose:

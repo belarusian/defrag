@@ -143,7 +143,9 @@ Example response:
 
         # Capture concepts that never appeared in any cluster.
         # Instead of emitting heuristics, gather deterministic context so we can ask the model again.
-        unassigned = [concept for concept in undocumented_concepts if concept.id not in assigned_ids]
+        unassigned = [
+            concept for concept in undocumented_concepts if concept.id not in assigned_ids
+        ]
         if unassigned:
             clusters["UNASSIGNED_CONCEPTS"] = unassigned
 
@@ -487,11 +489,11 @@ def generate_conceptual_docs_for_undocumented_code(
     # Find undocumented code
     code_concepts = semantic_index.get_code_concepts()
     matched_code_ids = {
-            m.code_concept_id for m in semantic_index.matches if m.confidence >= min_confidence
-        }
+        m.code_concept_id for m in semantic_index.matches if m.confidence >= min_confidence
+    }
     undocumented = [
-            c for c in code_concepts if isinstance(c, Concept) and c.id not in matched_code_ids
-        ]
+        c for c in code_concepts if isinstance(c, Concept) and c.id not in matched_code_ids
+    ]
 
     if not undocumented:
         if verbose:

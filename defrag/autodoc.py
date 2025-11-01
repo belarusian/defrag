@@ -435,23 +435,8 @@ Respond with JSON containing:
             ),
         )
 
-        title = (response.get("title") or "Concept Documentation").strip()
-        body = (response.get("content") or "").strip()
-
-        if body.startswith("#"):
-            body_lines = body.splitlines()
-            body_lines = body_lines[1:]
-            while body_lines and not body_lines[0].strip():
-                body_lines.pop(0)
-            body = "\n".join(body_lines).strip()
-
-        if title:
-            if body:
-                content = f"# {title}\n\n{body}"
-            else:
-                content = f"# {title}"
-        else:
-            content = body
+        # Use the content as provided by the model
+        content = response['content']
 
         # Add implementation references section
         if concepts:

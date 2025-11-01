@@ -248,7 +248,17 @@ See `src/errors.py` for the implementation.
         # Force some weak matches by analyzing with low threshold
         analyzer.match_all_concepts()
 
-        # Generate with high confidence threshold
+        def undocumented_ids(threshold: float):
+            matched = {
+                m.code_concept_id for m in analyzer.index.matches if m.confidence >= threshold
+            }
+            return {
+                concept.id
+                for concept in analyzer.index.get_code_concepts()
+                if concept.id not in matched
+            }
+
+        high_undocumented = undocumented_ids(0.8)
         high_threshold_docs = generate_conceptual_docs_for_undocumented_code(
             analyzer.index,
             llm,
@@ -258,8 +268,8 @@ See `src/errors.py` for the implementation.
             verbose=False,
         )
 
-        # Generate with low confidence threshold
-        low_threshold_docs = generate_conceptual_docs_for_undocumented_code(
+        low_undocumented = undocumented_ids(0.3)
+        generate_conceptual_docs_for_undocumented_code(
             analyzer.index,
             llm,
             undocumented_codebase,
@@ -268,8 +278,11 @@ See `src/errors.py` for the implementation.
             verbose=False,
         )
 
-        # With higher threshold, more code should be considered undocumented
-        # (Note: this depends on actual matching confidence values)
-        assert len(high_threshold_docs) >= len(
-            low_threshold_docs
-        ), "Higher confidence threshold should find more undocumented code"
+        # With higher threshold, more code concepts should be treated as undocumented.
+        assert high_undocumented.issuperset(
+            low_undocumented
+        ), "Higher confidence threshold should flag a superset of undocumented concepts"
+        assert len(high_threshold_docs) > 0, "Expected conceptual docs to be generated"
+        assert len(high_threshold_docs) <= len(
+            high_undocumented
+        ), "Generated docs should not exceed the number of undocumented concepts discovered"

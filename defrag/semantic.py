@@ -66,6 +66,7 @@ class ConceptMatch:
     suggested_link: Optional[str] = None  # Recommended physical reference
     context_needed: Optional[dict] = None  # What additional context LLM needs
     iterations: int = 1  # Number of analysis iterations
+    validated: bool = False  # Whether physical validation has been performed
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -78,11 +79,12 @@ class ConceptMatch:
             "suggested_link": self.suggested_link,
             "context_needed": self.context_needed,
             "iterations": self.iterations,
+            "validated": self.validated,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ConceptMatch":
-        """Create from dictionary."""
+        """Create from dictionary (backwards compatible)."""
         return cls(
             code_concept_id=data["code_concept_id"],
             doc_concept_id=data["doc_concept_id"],
@@ -92,6 +94,7 @@ class ConceptMatch:
             suggested_link=data.get("suggested_link"),
             context_needed=data.get("context_needed"),
             iterations=data.get("iterations", 1),
+            validated=data.get("validated", False),  # Default for old indexes
         )
 
 
@@ -101,6 +104,7 @@ class SemanticIndex:
 
     concepts: Dict[str, Concept] = field(default_factory=dict)
     matches: List[ConceptMatch] = field(default_factory=list)
+    metadata: Dict[str, any] = field(default_factory=lambda: {"version": "1.0"})
 
     def add_concept(self, concept: Concept) -> None:
         """Add or update a concept."""
@@ -150,14 +154,27 @@ class SemanticIndex:
     def to_dict(self) -> dict:
         """Convert to dictionary."""
         return {
+            "version": self.metadata.get("version", "1.0"),
+            "metadata": self.metadata,
             "concepts": {cid: c.to_dict() for cid, c in self.concepts.items()},
             "matches": [m.to_dict() for m in self.matches],
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "SemanticIndex":
-        """Create from dictionary."""
+        """Create from dictionary (backwards compatible)."""
         index = cls()
+
+        # Load metadata (backwards compatible with old indexes)
+        if "metadata" in data:
+            index.metadata = data["metadata"]
+        elif "version" in data:
+            # Old format: version at top level
+            index.metadata = {"version": data["version"]}
+        else:
+            # Very old format: no version
+            index.metadata = {"version": "1.0"}
+
         for cid, cdata in data.get("concepts", {}).items():
             index.concepts[cid] = Concept.from_dict(cdata)
         for mdata in data.get("matches", []):
@@ -165,10 +182,16 @@ class SemanticIndex:
         return index
 
     def save(self, path: str) -> None:
-        """Save semantic index to JSON file."""
+        """Save semantic index to JSON file atomically."""
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+
+        # Write to temporary file first
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
+
+        # Atomic rename (POSIX guarantees atomicity)
+        os.replace(tmp_path, path)
 
     @classmethod
     def load(cls, path: str) -> "SemanticIndex":

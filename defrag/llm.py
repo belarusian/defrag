@@ -92,30 +92,48 @@ class LLMClient:
         """Send prompt to provider and return raw text response."""
         return self._provider.send_prompt(prompt, max_tokens)
 
+    def generate_text(self, prompt: str, max_tokens: int = 2000) -> str:
+        """Generate free-form text response from the provider."""
+        log_context = "generate_text"
+        logger.debug("%s - prompt: %s", log_context, self._truncate(prompt))
+        response = self._send_prompt(prompt, max_tokens=max_tokens)
+        logger.debug("%s - raw response: %s", log_context, self._truncate(response))
+        return (response or "").strip()
+
     def _request_json(
         self, prompt: str, max_tokens: int, log_context: str, validator, schema_retry_builder
     ):
         """Send prompt, validate structured JSON, and retry once if needed."""
-        logger.debug(log_context)
+        logger.debug("%s - prompt: %s", log_context, self._truncate(prompt))
         raw = self._send_prompt(prompt, max_tokens=max_tokens)
+        logger.debug("%s - raw response: %s", log_context, self._truncate(raw))
         logger.debug("%s - API call succeeded", log_context)
 
         try:
             parsed = self._parse_json_content(raw)
         except ValueError as parse_error:
-            logger.warning("%s - JSON parse failed: %s", log_context, parse_error)
+            logger.warning(
+                "%s - JSON parse failed: %s. Raw=%s",
+                log_context,
+                parse_error,
+                self._truncate(raw),
+            )
             retry_prompt = self._build_parse_retry_prompt(parse_error, raw)
             logger.debug("Retrying with parse correction prompt: %s", retry_prompt[:500])
             raw_retry = self._send_prompt(retry_prompt, max_tokens=max_tokens)
             logger.debug("Parse retry raw response: %s", raw_retry[:500])
             parsed = self._parse_json_content(raw_retry)
-            # Update raw to the successfully parsed response for potential schema retry
             raw = raw_retry
 
         normalized, issues = validator(parsed)
 
         if issues:
-            logger.warning("%s - response missing required fields: %s", log_context, issues)
+            logger.warning(
+                "%s - response missing required fields: %s. Raw=%s",
+                log_context,
+                issues,
+                self._truncate(raw),
+            )
             retry_prompt = schema_retry_builder(parsed, issues, raw)
             logger.debug("Retrying with schema correction prompt: %s", retry_prompt[:500])
             raw_retry = self._send_prompt(retry_prompt, max_tokens=max_tokens)
@@ -123,6 +141,12 @@ class LLMClient:
             parsed_retry = self._parse_json_content(raw_retry)
             normalized, issues = validator(parsed_retry)
             if issues:
+                logger.error(
+                    "%s - invalid response after retry: %s. Raw=%s",
+                    log_context,
+                    "; ".join(f"entry {issue['index']}: {issue['error']}" for issue in issues),
+                    self._truncate(raw_retry),
+                )
                 raise ValueError(
                     "%s - invalid response after retry: %s"
                     % (
@@ -133,6 +157,14 @@ class LLMClient:
 
         return normalized
 
+    @staticmethod
+    def _truncate(value: Optional[str], length: int = 400) -> str:
+        if not value:
+            return ""
+        if len(value) <= length:
+            return value
+        return value[:length] + "...(truncated)"
+
     def _parse_json_content(self, raw_text: str) -> any:
         """Parse JSON text, allowing for markdown fences."""
         text = (raw_text or "").strip()
@@ -141,11 +173,17 @@ class LLMClient:
 
         cleaned = text
         if cleaned.startswith("```"):
-            parts = cleaned.split("```")
-            if len(parts) >= 3:
-                cleaned = parts[1]
-                if "\n" in cleaned:
-                    cleaned = cleaned.split("\n", 1)[1]
+            # Drop the opening fence (handles optional language identifier).
+            first_newline = cleaned.find("\n")
+            if first_newline != -1:
+                cleaned = cleaned[first_newline + 1 :]
+            else:
+                cleaned = ""
+
+            # Remove the trailing fence while preserving interior code fences.
+            last_fence = cleaned.rfind("```")
+            if last_fence != -1 and cleaned[last_fence:].strip("`\n\r ") == "":
+                cleaned = cleaned[:last_fence]
 
         cleaned = cleaned.strip()
         if not cleaned:

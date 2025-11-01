@@ -63,8 +63,12 @@ class SemanticAnalyzer:
                 if not content.strip():
                     continue
 
-                # Extract concept using LLM
-                concept_data = self.llm.extract_doc_concept(section_name, content)
+                try:
+                    concept_data = self.llm.extract_doc_concept(section_name, content)
+                except ValueError as exc:
+                    if verbose:
+                        print(f"  Warning: Failed to extract concept for '{section_name}': {exc}")
+                    continue
 
                 concept = Concept(
                     id=make_concept_id(doc_path, "doc", section_name),
@@ -115,8 +119,14 @@ class SemanticAnalyzer:
                 lines = source.split("\n")
                 snippet = "\n".join(lines[line_start - 1 : min(line_end, line_start + 50)])
 
-                # Extract concept using LLM
-                concept_data = self.llm.extract_code_concept(file_path, location, snippet)
+                try:
+                    concept_data = self.llm.extract_code_concept(file_path, location, snippet)
+                except ValueError as exc:
+                    if verbose:
+                        print(
+                            f"  Warning: Failed to extract concept for {file_path}:{location}: {exc}"
+                        )
+                    continue
 
                 concept = Concept(
                     id=make_concept_id(file_path, "code", location),

@@ -142,21 +142,215 @@ Example response:
                 clusters[f"{theme} (needs-review)"] = []
 
         # Capture concepts that never appeared in any cluster.
-        # Instead of emitting heuristics, gather deterministic context so we can ask the model again.
+        # Handle unassigned concepts with a better strategy
         unassigned = [
             concept for concept in undocumented_concepts if concept.id not in assigned_ids
         ]
-        if unassigned:
-            clusters["UNASSIGNED_CONCEPTS"] = unassigned
 
-            clusters["RECLUSTERING_PROMPT"] = (
-                "Some concepts were not grouped by the previous response. "
-                "Please analyze the UNASSIGNED_METADATA list and return an updated JSON with "
-                "'clusters' mapping semantic themes to concept IDs. "
-                "Only include concepts that remain truly unclustered under UNASSIGNED_CONCEPTS."
-            )
+        if unassigned:
+            # Always use the model to find connections - zoom out until we find them
+            retry_clusters = self._retry_clustering_for_unassigned(unassigned)
+            clusters.update(retry_clusters)
 
         return clusters
+
+    def _retry_clustering_for_unassigned(
+        self, unassigned: List[Concept]
+    ) -> Dict[str, List[Concept]]:
+        """
+        Zoom out to progressively broader abstraction levels until concepts connect.
+
+        The key insight: everything shares a parent somewhere up the conceptual tree.
+        We just need to find the right level of abstraction.
+
+        Returns:
+            Dictionary of theme -> concepts
+        """
+        if not unassigned:
+            return {}
+
+        # Build concept descriptions
+        concepts_desc = []
+        for concept in unassigned[:30]:  # Include more for better pattern recognition
+            concepts_desc.append(
+                {
+                    "id": concept.id,
+                    "source": concept.source,
+                    "name": concept.location,
+                    "description": concept.description,
+                }
+            )
+
+        # Try multiple levels of abstraction, zooming out each time
+        abstraction_levels = [
+            "specific functionality (e.g., 'User Authentication', 'Cache Management', 'Error Recovery')",
+            "system capabilities (e.g., 'Data Management', 'Security Features', 'Performance Optimization')",
+            "architectural layers (e.g., 'Business Logic', 'Infrastructure', 'External Integrations')",
+            "system aspects (e.g., 'Core Functionality', 'Supporting Utilities', 'Developer Tools')",
+        ]
+
+        for level_idx, abstraction_level in enumerate(abstraction_levels):
+            prompt = f"""Group these code concepts by {abstraction_level}.
+
+IMPORTANT: Every piece of code exists for a reason. Find the conceptual connections.
+Look for patterns in what these components DO, not just their names or locations.
+
+Concepts to cluster:
+{concepts_desc}
+
+Think about:
+- What problem do these components solve?
+- What system capability do they enable?
+- What architectural role do they play?
+- How do they contribute to the overall system?
+
+Group them by their shared purpose at this abstraction level: {abstraction_level}
+
+Respond with JSON:
+{{
+    "clusters": {{
+        "meaningful_theme_name": ["concept_id1", "concept_id2"],
+        ...
+    }},
+    "rationale": "Brief explanation of the grouping logic"
+}}
+"""
+
+            try:
+                response = self.llm._request_json(
+                    prompt,
+                    max_tokens=2000,
+                    log_context=f"Clustering at abstraction level {level_idx + 1}",
+                    validator=lambda data: self._validate_cluster_response(data, concepts_desc),
+                    schema_retry_builder=lambda parsed, issues, raw: self._build_cluster_retry_prompt(
+                        concepts_desc, issues, raw
+                    ),
+                )
+
+                # Convert IDs back to concepts
+                result_clusters = {}
+                clustered_ids = set()
+
+                for theme, ids in response.get("clusters", {}).items():
+                    if theme and len(ids) > 0:
+                        theme_concepts = [c for c in unassigned if c.id in ids]
+                        if theme_concepts:
+                            result_clusters[theme] = theme_concepts
+                            clustered_ids.update(ids)
+
+                # Check if we successfully clustered most concepts
+                if len(clustered_ids) >= len(unassigned) * 0.7:  # 70% threshold
+                    return result_clusters
+
+                # If not enough were clustered, zoom out to next level
+                continue
+
+            except Exception:
+                # Try next abstraction level
+                continue
+
+        # Final attempt: Force the model to find connections at the highest level
+        return self._force_semantic_grouping(unassigned)
+
+    def _force_semantic_grouping(self, concepts: List[Concept]) -> Dict[str, List[Concept]]:
+        """
+        Force the model to find semantic connections at the highest abstraction level.
+
+        The premise: Everything in a codebase exists for a reason and connects somehow.
+        We just need to zoom out far enough to see the forest.
+        """
+        if not concepts:
+            return {}
+
+        concepts_desc = []
+        for concept in concepts:
+            concepts_desc.append(
+                {
+                    "id": concept.id,
+                    "source": concept.source,
+                    "name": concept.location,
+                    "description": concept.description,
+                }
+            )
+
+        prompt = f"""You must group ALL these code concepts by their PURPOSE in the system.
+
+CRITICAL: Every piece of code exists for a reason. At a high enough level, everything connects.
+Think about the SYSTEM AS A WHOLE - what role does each component play?
+
+Concepts to group:
+{concepts_desc}
+
+Instructions:
+1. Consider the entire system's purpose
+2. Think about how each component contributes to that purpose
+3. Group by the fundamental problems they solve or capabilities they provide
+4. DO NOT leave any concept ungrouped
+5. DO NOT use "Unassigned" or "Miscellaneous" - find real connections
+
+Examples of good high-level themes:
+- "System Initialization and Configuration"
+- "Core Business Logic"
+- "Data Pipeline and Processing"
+- "External System Integration"
+- "Developer Experience and Tooling"
+- "System Resilience and Recovery"
+
+Remember: At the system level, everything has a purpose. Find it.
+
+Respond with JSON (group ALL concepts):
+{{
+    "clusters": {{
+        "System Purpose Theme": ["concept_id1", "concept_id2", ...],
+        "Another System Theme": ["concept_id3", "concept_id4", ...]
+    }},
+    "rationale": "How these groupings reflect the system's architecture"
+}}
+"""
+
+        try:
+            response = self.llm._request_json(
+                prompt,
+                max_tokens=3000,
+                log_context="Forcing semantic grouping at system level",
+                validator=lambda data: self._validate_cluster_response(data, concepts_desc),
+                schema_retry_builder=lambda parsed, issues, raw: self._build_cluster_retry_prompt(
+                    concepts_desc, issues, raw
+                ),
+            )
+
+            # Convert IDs back to concepts
+            result_clusters = {}
+            for theme, ids in response.get("clusters", {}).items():
+                if theme and len(ids) > 0:
+                    theme_concepts = [c for c in concepts if c.id in ids]
+                    if theme_concepts:
+                        result_clusters[theme] = theme_concepts
+
+            # If model still didn't group everything, put remainder in a system-level bucket
+            grouped_ids = set()
+            for concepts_list in result_clusters.values():
+                grouped_ids.update(c.id for c in concepts_list)
+
+            ungrouped = [c for c in concepts if c.id not in grouped_ids]
+            if ungrouped:
+                # One more attempt with just the ungrouped ones
+                if len(ungrouped) > 1:
+                    result_clusters["System Infrastructure Components"] = ungrouped
+                else:
+                    # Single concept - add to most relevant existing cluster
+                    if result_clusters:
+                        first_theme = next(iter(result_clusters))
+                        result_clusters[first_theme].append(ungrouped[0])
+                    else:
+                        result_clusters["System Components"] = ungrouped
+
+            return result_clusters
+
+        except Exception:
+            # This should never happen, but if it does, group everything
+            # under a single system-level theme
+            return {"System Components": concepts}
 
     def generate_conceptual_doc(
         self, semantic_theme: str, concepts: List[Concept], existing_docs: List[str] = None
@@ -181,34 +375,58 @@ Example response:
             detail += f": {c.description}"
             concepts_detail.append(detail)
 
-        prompt = f"""Create conceptual documentation for the following semantic theme.
+        # Sanitize the theme name to avoid meta-documentation
+        sanitized_theme = semantic_theme
+        if "UNASSIGNED" in semantic_theme.upper() or semantic_theme.upper() == "CONCEPTS":
+            # Derive a better theme name from the actual concepts
+            if concepts:
+                # Look at the actual functionality
+                sources = [c.source for c in concepts[:3]]
+                common_module = None
+                if sources:
+                    # Try to find common module
+                    if all("/" in s for s in sources):
+                        dirs = [s.rsplit("/", 1)[0] for s in sources]
+                        if len(set(dirs)) == 1:
+                            common_module = dirs[0].split("/")[-1]
+                    if not common_module:
+                        common_module = sources[0].replace(".py", "").split("/")[-1]
+                    sanitized_theme = f"{common_module.title()} Functionality"
+            else:
+                sanitized_theme = "Core System Components"
 
-Theme: {semantic_theme}
+        prompt = f"""Create conceptual documentation for the following code components.
+
+Theme: {sanitized_theme}
 
 Related code implementations:
 {chr(10).join(concepts_detail)}
 
+IMPORTANT: Document what these code components ACTUALLY DO, not the abstract concept of "unassigned" or "concepts".
+Look at the actual functionality (e.g., validation, processing, caching, etc.) and document THAT.
+
 Generate documentation that:
-1. Explains the CONCEPTUAL PURPOSE - the "why" behind this functionality
-2. Describes the high-level approach or strategy
-3. Explains how these components work together conceptually
-4. References the code implementations as leaf nodes
-5. Focuses on semantic understanding, not API details
+1. Explains what these specific components DO and their PURPOSE
+2. Describes the actual functionality they provide
+3. Explains how these components work together
+4. References the code implementations as supporting evidence
+5. Focuses on the real-world functionality, not meta-concepts
 
 Do NOT:
+- Write about "unassigned concepts" or documentation management
 - Document individual function signatures
 - List parameters and return types
 - Create API reference material
+- Use the word "unassigned" in your documentation
 
-Instead, create semantic documentation that helps readers understand the concept,
-with code references showing where the concept is implemented.
+Instead, create documentation about the ACTUAL functionality these code components provide.
 
 Format as Markdown.
 
 Respond with JSON containing:
-- "content": The markdown documentation
-- "filename": Suggested filename (e.g., "caching-strategy.md")
-- "title": Document title
+- "content": The markdown documentation (about actual functionality)
+- "filename": Suggested filename based on actual functionality (e.g., "validation-system.md", "data-processing.md")
+- "title": Document title describing the actual functionality
 """
 
         response = self.llm._request_json(
@@ -221,8 +439,8 @@ Respond with JSON containing:
             ),
         )
 
-        # Build final document with proper structure
-        content = f"# {response['title']}\n\n{response['content']}"
+        # Use the content as provided by the model
+        content = response["content"]
 
         # Add implementation references section
         if concepts:

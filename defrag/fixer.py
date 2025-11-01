@@ -67,81 +67,123 @@ def rewrite_document_with_llm(
     max_tokens: int = 8000,
     verbose: bool = False,
 ) -> Optional[str]:
-    """Ask the LLM to intelligently merge references into documentation."""
+    """Intelligently merge references into documentation by processing sections."""
 
     if not matches_payload:
         return None
 
-    prompt_lines = [
-        "You are updating project documentation to incorporate implementation references.",
-        "Integrate the provided code references naturally into the document.",
-        "Maintain the existing tone and structure unless a small adjustment improves clarity.",
-        "Avoid dumping lists of 'See ...'; weave references into prose or dedicated sections.",
-        "Return only the updated markdown document.",
-        "",
-        f"Document path: {doc_path}",
-        "",
-        "Current document:",
-        "```markdown",
-        original_content,
-        "```",
-        "",
-        "Code references to incorporate:",
-    ]
-
+    # Group matches by section
+    from collections import defaultdict
+    sections_to_update = defaultdict(list)
     for payload in matches_payload:
-        prompt_lines.append(
-            f"- Section: {payload['section']}\n  Code: `{payload['code_reference']}`\n"
-            f"  Code summary: {payload['code_summary']}\n  Reasoning: {payload['reasoning']}"
-        )
+        sections_to_update[payload['section']].append(payload)
 
-    prompt_lines.extend(
-        [
+    # Process each section that needs updates
+    updated_content = original_content
+
+    for section_name, section_matches in sections_to_update.items():
+        # Find the section in the document
+        section_range = find_section_in_markdown(updated_content, section_name)
+        if not section_range:
+            if verbose:
+                print(f"    Warning: Section '{section_name}' not found in document")
+            continue
+
+        start_line, end_line = section_range
+        lines = updated_content.split("\n")
+
+        # Extract just this section
+        section_lines = lines[start_line:end_line + 1]
+        section_content = "\n".join(section_lines)
+
+        # Skip if section is too small to meaningfully update
+        if len(section_content.strip()) < 50:
+            continue
+
+        # Build focused prompt for just this section
+        prompt_lines = [
+            "You are integrating code references into a documentation section.",
+            "Add the references naturally within the existing text.",
+            "DO NOT just append references at the end.",
+            "Weave them into the narrative where they make sense.",
             "",
-            "Rewrite the document so these references feel native to the narrative.",
-            "Return only the updated markdown with no additional commentary.",
+            f"Section name: {section_name}",
+            "",
+            "Current section content:",
+            "```markdown",
+            section_content,
+            "```",
+            "",
+            "Code references to integrate into this section:",
         ]
-    )
 
-    prompt = "\n".join(prompt_lines)
-
-    # Dynamically adjust max_tokens based on document size
-    # Estimate needed tokens: original content + 50% for additions
-    content_tokens_estimate = len(original_content) // 3  # rough char-to-token ratio
-    needed_tokens = int(content_tokens_estimate * 1.5)
-    actual_max_tokens = max(max_tokens, min(needed_tokens, 16000))  # cap at 16k
-
-    if verbose:
-        print(f"    Document size: {len(original_content)} chars, using {actual_max_tokens} max tokens")
-
-    try:
-        response = llm.generate_text(prompt, max_tokens=actual_max_tokens)
-    except Exception as exc:
-        if verbose:
-            print(f"    LLM rewrite failed for {doc_path}: {exc}")
-        return None
-
-    cleaned = _clean_markdown_output(response)
-    if not cleaned:
-        if verbose:
-            print(f"    LLM rewrite returned empty content for {doc_path}")
-        return None
-
-    if not _is_rewrite_safe(original_content, cleaned):
-        if verbose:
-            orig_len = len(original_content.strip())
-            new_len = len(cleaned.strip())
-            print(
-                f"    LLM rewrite rejected for {doc_path}: failed safety checks"
+        for match in section_matches:
+            prompt_lines.append(
+                f"- Code: `{match['code_reference']}`"
             )
-            print(f"      Original: {orig_len} chars, Rewritten: {new_len} chars")
-            if new_len < orig_len * 0.7:
-                print(f"      Reason: Output too short (less than 70% of original)")
-            else:
-                print(f"      Reason: Missing critical headings")
+            prompt_lines.append(
+                f"  Purpose: {match['code_summary']}"
+            )
+            prompt_lines.append(
+                f"  Why it relates: {match['reasoning']}"
+            )
+            prompt_lines.append("")
+
+        prompt_lines.extend([
+            "Instructions:",
+            "1. Keep the section structure and headings intact",
+            "2. Integrate references naturally into sentences",
+            "3. Use phrases like 'implemented in', 'as seen in', 'handled by', etc.",
+            "4. Don't create bullet lists of references",
+            "5. Return ONLY the updated section content",
+            "",
+            "Return the updated section with references woven into the text:"
+        ])
+
+        prompt = "\n".join(prompt_lines)
+
+        # Calculate tokens needed for this section
+        section_tokens = max(2000, len(section_content) // 2)  # More conservative estimate
+
+        if verbose:
+            print(f"    Updating section '{section_name}' ({len(section_content)} chars)")
+
+        try:
+            response = llm.generate_text(prompt, max_tokens=section_tokens)
+            if not response:
+                if verbose:
+                    print(f"      LLM returned empty response for section")
+                continue
+
+            cleaned = _clean_markdown_output(response)
+            if not cleaned:
+                continue
+
+            # Verify the section wasn't truncated
+            if len(cleaned) < len(section_content) * 0.5:
+                if verbose:
+                    print(f"      Section response too short, skipping")
+                continue
+
+            # Replace the section in the document
+            new_lines = lines[:start_line] + cleaned.split("\n") + lines[end_line + 1:]
+            updated_content = "\n".join(new_lines)
+
+            if verbose:
+                print(f"      Successfully updated section")
+
+        except Exception as exc:
+            if verbose:
+                print(f"      Failed to update section: {exc}")
+            continue
+
+    # If no sections were updated, return None to trigger fallback
+    if updated_content == original_content:
+        if verbose:
+            print(f"    No sections could be updated")
         return None
 
-    return cleaned
+    return updated_content
 
 
 def find_section_in_markdown(content: str, section_name: str) -> Optional[Tuple[int, int]]:

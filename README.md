@@ -106,14 +106,14 @@ defrag validate --doc README.md  # Check links
 defrag report                   # Show status
 
 # Semantic analysis (set provider + API key)
-# Anthropic Claude (default):
+# OpenAI GPT-4o (default):
 
-See `defrag/llm.py:824-846` - This section explains how to set the API key for Anthropic Claude, which is essential for interacting with the API as described in the code concept.
-export ANTHROPIC_API_KEY=your_key_here
-# OpenAI (defaults to gpt-5-mini-2025-08-07):
-# export DEFRAG_LLM_PROVIDER=openai
-# export OPENAI_API_KEY=your_key_here
-# export DEFRAG_LLM_MODEL=gpt-4o   # optional override
+See `defrag/llm.py:824-846` - This section explains how to set the API key for OpenAI GPT-4o, which is essential for interacting with the API as described in the code concept.
+export OPENAI_API_KEY=your_key_here
+# Anthropic (optional override):
+# export DEFRAG_LLM_PROVIDER=anthropic
+# export ANTHROPIC_API_KEY=your_key_here
+# export DEFRAG_LLM_MODEL=claude-sonnet-4-5-20250929   # optional override
 
 defrag semantic-analyze --verbose        # Full analysis
 defrag semantic-analyze --verbose --resume  # Resume and skip unchanged files
@@ -309,7 +309,7 @@ defrag/
 ├── indexer.py        # Index persistence
 ├── validator.py      # Physical link validation
 ├── semantic.py       # Semantic models
-├── llm.py            # LLM client (Anthropic/OpenAI)
+├── llm.py            # LLM client (OpenAI/Anthropic)
 ├── analyzer.py       # Semantic analysis orchestrator
 ├── fixer.py          # Auto-fix missing links
 ├── cli.py            # CLI interface
@@ -341,7 +341,7 @@ LLM API calls for full analysis:
 ## Requirements
 
 - Python 3.8+
-- Anthropic or OpenAI API key (for semantic analysis)
+- OpenAI or Anthropic API key (for semantic analysis)
 
 ## License
 

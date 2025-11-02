@@ -151,11 +151,11 @@ See `examples/icegraph_demo.py:25-197` - The code concept involves a process rel
 ```bash
 # Set provider + API key
 
-See `defrag/llm.py:824-846` - This section explains how to set the API key for the default provider, Anthropic Claude, which is directly related to the code's purpose of interacting with the Anthropic Claude API.
-export ANTHROPIC_API_KEY=your_key_here            # default provider: Anthropic Claude
-# export DEFRAG_LLM_PROVIDER=openai
-# export OPENAI_API_KEY=your_key_here             # use for OpenAI models
-# export DEFRAG_LLM_MODEL=gpt-4o                  # optional model override
+See `defrag/llm.py:824-846` - This section explains how to set the API key for the default provider, OpenAI GPT-4o, which is directly related to the code's purpose of interacting with the OpenAI API.
+export OPENAI_API_KEY=your_key_here             # default provider: OpenAI GPT-4o
+# export DEFRAG_LLM_PROVIDER=anthropic
+# export ANTHROPIC_API_KEY=your_key_here         # use for Anthropic models
+# export DEFRAG_LLM_MODEL=claude-sonnet-4-5-20250929  # optional model override
 
 # Run full semantic analysis
 python -m tools.defrag semantic-analyze --verbose
@@ -240,22 +240,22 @@ See `tests/unit/test_fixer.py:43-69` - The code concept involves testing the int
 
 See `tests/unit/test_depth_limit.py:77-136` - The code concept involves testing a scanner's ability to handle directory structures using a mock language model, which aligns with the documentation about running integration tests that require a language model.
 ```bash
-# Default provider is Anthropic unless DEFRAG_LLM_PROVIDER is set
+# Default provider is OpenAI unless DEFRAG_LLM_PROVIDER is set
 
-See `tests/unit/test_llm_client.py:55-65` - This section explains that Anthropic is the default provider, which directly matches the code concept of verifying the default provider.
+See `tests/unit/test_llm_client.py:55-65` - This section explains that OpenAI is the default provider, which directly matches the code concept of verifying the default provider.
 
-See `tests/unit/test_llm_client.py:68-79` - This section explains that Anthropic is the default provider unless a different provider is specified using the DEFRAG_LLM_PROVIDER environment variable, which is relevant to the code concept of selecting OpenAI as the provider based on environment variables.
+See `tests/unit/test_llm_client.py:68-79` - This section explains that OpenAI is the default provider unless a different provider is specified using the DEFRAG_LLM_PROVIDER environment variable, which is relevant to the code concept of selecting Anthropic as an alternative.
 
-See `tests/unit/test_llm_client.py:82-92` - This section explains that Anthropic is the default provider unless a different provider is specified using the DEFRAG_LLM_PROVIDER environment variable, which aligns with the code concept of testing model environment variable overrides.
+See `tests/unit/test_llm_client.py:82-92` - This section explains that provider selection honors environment overrides, which aligns with the code concept of testing model environment variable overrides.
 
 See `defrag/semantic_cli.py:29-179` - The documentation section explains the default provider for the language model, which aligns with the code concept of performing semantic analysis using a specified or default language model provider. This indicates that the code likely implements the functionality described in the documentation.
 
-See `defrag/llm.py:79-89` - The code concept involves selecting a provider, which matches the documentation about Anthropic being the default provider unless specified otherwise.
-export ANTHROPIC_API_KEY=your_key_here
+See `defrag/llm.py:79-89` - The code concept involves selecting a provider, which matches the documentation about OpenAI being the default provider unless specified otherwise.
+export OPENAI_API_KEY=your_key_here
 # Optional overrides:
-# export DEFRAG_LLM_PROVIDER=openai
-# export OPENAI_API_KEY=your_key_here
-# export DEFRAG_LLM_MODEL=gpt-4o            # defaults to claude-sonnet-4-5-20250929 for Anthropic
+# export DEFRAG_LLM_PROVIDER=anthropic
+# export ANTHROPIC_API_KEY=your_key_here
+# export DEFRAG_LLM_MODEL=claude-sonnet-4-5-20250929  # defaults to gpt-4o for OpenAI
 
 # Run semantic pipeline integration suite with verbose logging
 pytest tests/integration -vv \

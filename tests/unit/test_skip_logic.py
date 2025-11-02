@@ -222,7 +222,7 @@ def test_skip_already_validated_matches(capsys):
     try:
         index.save(tmp_path)
 
-        analyzer = SemanticAnalyzer(llm_client=None, resume_from=tmp_path)
+        analyzer = SemanticAnalyzer(llm_client=MagicMock(), resume_from=tmp_path)
 
         # Run validation
         analyzer.validate_with_physical_links(verbose=True)

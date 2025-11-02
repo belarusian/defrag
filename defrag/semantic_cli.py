@@ -152,9 +152,10 @@ def cmd_semantic_analyze(args):
 
     # Determine resume path
     output_path = _resolve_index_path(args.output, args.root)
-    resume_from = output_path if args.resume else None
+    resume_flag = getattr(args, "resume", False)
+    resume_from = output_path if resume_flag else None
 
-    if args.resume:
+    if resume_flag:
         if os.path.exists(output_path):
             print(f"Resume mode: will load existing index from {output_path}")
         else:
@@ -443,8 +444,9 @@ def cmd_semantic_fix(args):
             print(f"\nHint: Set {key_env} environment variable or pass --api-key")
         return 1
 
+    resume_flag = getattr(args, "resume", False)
     resume_state = FixResumeState(args.root, True)
-    if args.resume:
+    if resume_flag:
         if not resume_state.was_loaded:
             print("Resume mode: no previous fix state found; starting fresh")
     elif resume_state.was_loaded:
@@ -456,7 +458,7 @@ def cmd_semantic_fix(args):
     processed_docs: List[str] = []
 
     def _should_skip_doc(doc_path: str) -> bool:
-        return args.resume and resume_state.is_doc_completed(doc_path)
+        return resume_flag and resume_state.is_doc_completed(doc_path)
 
     def _record_doc_progress(doc_path: str, changes: List[str]) -> None:
         resume_state.record_doc(doc_path)
@@ -492,7 +494,7 @@ def cmd_semantic_fix(args):
     print("\nStep 2: Generating conceptual documentation for undocumented code...")
 
     # Generate conceptual docs for undocumented code
-    skip_concepts = resume_state.code_processed if args.resume else None
+    skip_concepts = resume_state.code_processed if resume_flag else None
     generated_docs, concept_map = generate_conceptual_docs_for_undocumented_code(
         index,
         llm,

@@ -52,17 +52,17 @@ def make_stub_provider(send_return=""):
     return client, provider
 
 
-def test_llm_client_defaults_to_anthropic(monkeypatch):
-    """Default provider should be Anthropic with corresponding model."""
+def test_llm_client_defaults_to_openai(monkeypatch):
+    """Default provider should be OpenAI with corresponding model."""
     client_obj, provider = make_stub_provider()
     monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
-    monkeypatch.setenv(LLMClient.PROVIDER_KEY_ENVS["anthropic"], "ant-key")
+    monkeypatch.setenv(LLMClient.PROVIDER_KEY_ENVS["openai"], "openai-key")
 
     client = LLMClient()
 
-    assert client.provider == "anthropic"
-    assert client.model == LLMClient.DEFAULT_MODELS["anthropic"]
-    assert client.api_key == "ant-key"
+    assert client.provider == "openai"
+    assert client.model == LLMClient.DEFAULT_MODELS["openai"]
+    assert client.api_key == "openai-key"
 
 
 def test_llm_client_selects_openai_from_env(monkeypatch):

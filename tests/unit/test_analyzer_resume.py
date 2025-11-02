@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from defrag.analyzer import SemanticAnalyzer
 from defrag.semantic import Concept, ConceptMatch, SemanticIndex
@@ -38,7 +39,7 @@ def test_analyzer_resumes_from_existing_index(capsys):
         index.save(tmp_path)
 
         # Resume from the index (no LLM client needed for this test)
-        analyzer = SemanticAnalyzer(llm_client=None, root_dir=".", resume_from=tmp_path)
+        analyzer = SemanticAnalyzer(llm_client=MagicMock(), root_dir=".", resume_from=tmp_path)
 
         # Verify data was loaded
         assert len(analyzer.index.concepts) == 1
@@ -55,7 +56,7 @@ def test_analyzer_resumes_from_existing_index(capsys):
 
 def test_analyzer_starts_fresh_if_no_resume_path():
     """Test that analyzer starts with empty index when not resuming."""
-    analyzer = SemanticAnalyzer(llm_client=None, root_dir=".", resume_from=None)
+    analyzer = SemanticAnalyzer(llm_client=MagicMock(), root_dir=".", resume_from=None)
 
     assert len(analyzer.index.concepts) == 0
     assert len(analyzer.index.matches) == 0
@@ -63,7 +64,9 @@ def test_analyzer_starts_fresh_if_no_resume_path():
 
 def test_analyzer_starts_fresh_if_resume_path_nonexistent():
     """Test that analyzer starts fresh if resume path doesn't exist."""
-    analyzer = SemanticAnalyzer(llm_client=None, root_dir=".", resume_from="/nonexistent/path.json")
+    analyzer = SemanticAnalyzer(
+        llm_client=MagicMock(), root_dir=".", resume_from="/nonexistent/path.json"
+    )
 
     assert len(analyzer.index.concepts) == 0
     assert len(analyzer.index.matches) == 0
@@ -80,7 +83,7 @@ def test_analyzer_raises_on_malformed_index():
         import pytest
 
         with pytest.raises(ValueError, match="Failed to load index"):
-            SemanticAnalyzer(llm_client=None, root_dir=".", resume_from=tmp_path)
+            SemanticAnalyzer(llm_client=MagicMock(), root_dir=".", resume_from=tmp_path)
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -97,7 +100,7 @@ def test_analyzer_preserves_metadata_on_resume():
     try:
         index.save(tmp_path)
 
-        analyzer = SemanticAnalyzer(llm_client=None, root_dir=".", resume_from=tmp_path)
+        analyzer = SemanticAnalyzer(llm_client=MagicMock(), root_dir=".", resume_from=tmp_path)
 
         assert analyzer.index.metadata["custom_field"] == "test_value"
         assert analyzer.index.metadata["file_hashes"]["app.py"] == "abc123"

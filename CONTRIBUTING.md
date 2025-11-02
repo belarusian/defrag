@@ -18,33 +18,26 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Set up API key for testing (choose provider)
-export ANTHROPIC_API_KEY=your_key_here           # Anthropic Claude (default)
+export OPENAI_API_KEY=your_key_here            # OpenAI GPT-4o (default)
+# export DEFRAG_LLM_PROVIDER=anthropic
+# export ANTHROPIC_API_KEY=your_key_here       # Anthropic Claude
 
-When setting up your API key for testing with Anthropic Claude, it's essential to understand how this key is utilized within the system. The process of interacting with large language models (LLMs) from various providers, including Anthropic, is defined in the client class implemented in `defrag/llm.py:17-783`. This class is crucial for semantic analysis and requires proper API key configuration to function correctly.
+When setting up your API key for testing, the LLM client implemented in `defrag/llm.py`
+selects OpenAI by default and falls back to Anthropic when `DEFRAG_LLM_PROVIDER` is
+overridden. The client handles semantic analysis prompts and requires a valid key for
+the chosen provider.
 
-Specifically, for Anthropic Claude, the interaction is further detailed in the class defined in `defrag/llm.py:786-808`, which handles generating text responses based on user prompts. This interaction necessitates the API key setup as described here.
+See `tests/integration/test_semantic_pipeline.py:35-37` - This section explains how the
+tests check for provider credentials before running.
 
+See `tests/integration/test_autodoc_generation.py:18-26` - This section explains how
+integration tests skip when provider keys are absent, matching the client behaviour.
 
-See `tests/integration/test_semantic_pipeline.py:35-37` - This section explains how to set up an API key for testing with Anthropic Claude, which aligns with checking for API credentials for LLM providers.
+See `tests/unit/test_llm_client.py:55-65` - This section verifies that OpenAI is the
+default provider and demonstrates how environment variables control provider selection.
 
-See `tests/integration/test_autodoc_generation.py:18-26` - This section explains how to set up an API key for testing with Anthropic Claude, which aligns with the code's purpose of retrieving a language model client for testing.
-
-See `tests/integration/test_intelligent_doc_merging.py:18-26` - This section explains how to set up an API key for testing with Anthropic Claude, which aligns with the code's focus on retrieving a language model client for testing and checking for an API key.
-
-See `tests/integration/test_intelligent_discovery_integration.py:25-286` - The code concept involves using an API key for testing with a language model, which aligns with the documentation about setting up an API key for testing with Anthropic Claude.
-
-See `tests/unit/test_llm_client.py:55-65` - This section explains how to set up an API key for testing with Anthropic Claude, which is relevant to the test verifying the default provider and API key.
-
-See `tests/unit/test_llm_client.py:48-49` - The code concept involves sending prompts to a language model, which requires setting up an API key for interaction, as described in this documentation section.
-
-See `defrag/llm.py:824-846` - This section explains how to set up an API key for testing with Anthropic Claude, which is directly relevant to interacting with the Anthropic Claude API for generating text responses.
-
-See `defrag/llm.py:91-93` - The code concept involves sending a prompt to a provider and receiving a response, which aligns with setting up an API key for interacting with language models.
-
-See `examples/icegraph_demo.py:25-197` - The code concept involves setting up an API key for semantic analysis, which aligns with the documentation on setting up an API key for testing with Anthropic Claude.
-Additionally, the initialization of a client and provider object, which is based on the specified provider type such as 'anthropic', is handled by the code in `defrag/llm.py:79-89`. This initialization process underscores the importance of correctly setting up your API key to ensure seamless communication with the Anthropic Claude API.
-# export DEFRAG_LLM_PROVIDER=openai
-# export OPENAI_API_KEY=your_key_here            # OpenAI
+See `defrag/llm.py:79-89` - The code initializes the provider and highlights the need to
+set the appropriate API key.
 
 ## Running Tests
 

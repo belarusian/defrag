@@ -1,6 +1,5 @@
 """Unit tests for semantic CLI resume flows using stub clients."""
 
-import json
 import os
 from types import SimpleNamespace
 

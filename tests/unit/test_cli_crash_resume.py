@@ -1,7 +1,5 @@
 """Tests for crash/resume scenarios using stubbed LLM clients (unit level)."""
 
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from defrag.analyzer import SemanticAnalyzer

@@ -74,11 +74,24 @@ class SemanticAnalyzer:
         """
         Analyze documentation files and extract concepts.
 
+        When resuming, skips files that already have concepts in the index.
+
         Args:
             doc_paths: List of markdown file paths
             verbose: Print progress
         """
         for doc_path in doc_paths:
+            # Check if this file already has concepts (skip if resuming)
+            existing_concepts = [
+                c for c in self.index.concepts.values()
+                if c.source_type == "doc" and c.source == doc_path
+            ]
+
+            if existing_concepts:
+                if verbose:
+                    print(f"Skipping already-processed doc: {doc_path} ({len(existing_concepts)} concepts)")
+                continue
+
             if verbose:
                 print(f"Analyzing doc: {doc_path}")
 
@@ -115,10 +128,23 @@ class SemanticAnalyzer:
         """
         Analyze Python file and extract concepts.
 
+        When resuming, skips files that already have concepts in the index.
+
         Args:
             file_path: Path to Python file
             verbose: Print progress
         """
+        # Check if this file already has concepts (skip if resuming)
+        existing_concepts = [
+            c for c in self.index.concepts.values()
+            if c.source_type == "code" and c.source == file_path
+        ]
+
+        if existing_concepts:
+            if verbose:
+                print(f"  Skipping already-processed: {file_path} ({len(existing_concepts)} concepts)")
+            return
+
         full_path = os.path.join(self.root_dir, file_path)
 
         if not os.path.exists(full_path):
@@ -189,6 +215,8 @@ class SemanticAnalyzer:
         """
         Match code concepts to documentation concepts.
 
+        When resuming, skips code concepts that already have matches.
+
         Args:
             verbose: Print progress
             max_iterations: Max refinement iterations (0 to disable auto-refinement)
@@ -196,9 +224,15 @@ class SemanticAnalyzer:
         code_concepts = self.index.get_code_concepts()
         doc_concepts = self.index.get_doc_concepts()
 
+        # Build set of already-matched code concept IDs
+        already_matched = {m.code_concept_id for m in self.index.matches}
+
         if verbose:
+            skipped_count = len(already_matched)
+            new_count = len(code_concepts) - skipped_count
             print(
-                f"\nMatching {len(code_concepts)} code concepts to {len(doc_concepts)} doc concepts..."
+                f"\nMatching {len(code_concepts)} code concepts to {len(doc_concepts)} doc concepts "
+                f"({skipped_count} already matched, {new_count} new)..."
             )
 
         # Prepare doc concepts for matching
@@ -207,6 +241,12 @@ class SemanticAnalyzer:
         ]
 
         for code_concept in code_concepts:
+            # Skip if already matched (resuming)
+            if code_concept.id in already_matched:
+                if verbose:
+                    print(f"\nSkipping already-matched: {code_concept.source}:{code_concept.location}")
+                continue
+
             if verbose:
                 print(f"\nMatching: {code_concept.source}:{code_concept.location}")
 
@@ -258,13 +298,22 @@ class SemanticAnalyzer:
         """
         Validate semantic matches using physical link validator (grounding heuristic).
 
+        When resuming, skips matches that have already been validated.
         Checks if documentation already has physical links to matched code.
         Updates match confidence based on link validity.
         """
-        if verbose:
-            print("\nValidating with physical links (grounding heuristic)...")
+        # Filter to only unvalidated matches
+        unvalidated_matches = [m for m in self.index.matches if not m.validated]
 
-        for match in self.index.matches:
+        if verbose:
+            total = len(self.index.matches)
+            already_validated = total - len(unvalidated_matches)
+            print(
+                f"\nValidating with physical links (grounding heuristic)... "
+                f"({already_validated} already validated, {len(unvalidated_matches)} new)"
+            )
+
+        for match in unvalidated_matches:
             doc_concept = self.index.get_concept(match.doc_concept_id)
             code_concept = self.index.get_concept(match.code_concept_id)
 
@@ -309,6 +358,9 @@ class SemanticAnalyzer:
 
             except (IOError, UnicodeDecodeError):
                 pass
+
+            # Mark this match as validated (even if validation failed/was inconclusive)
+            match.validated = True
 
     def refine_low_confidence_matches(self, max_iterations: int = 3, verbose: bool = False) -> None:
         """

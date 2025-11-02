@@ -116,8 +116,10 @@ export ANTHROPIC_API_KEY=your_key_here
 # export DEFRAG_LLM_MODEL=gpt-4o   # optional override
 
 defrag semantic-analyze --verbose        # Full analysis
+defrag semantic-analyze --verbose --resume  # Resume and skip unchanged files
 defrag semantic-report --show-gc         # View results
 defrag semantic-validate --verbose       # Check discrepancies
+defrag semantic-fix --apply --resume     # Continue fixing after a crash
 
 See `defrag/semantic_cli.py:29-179` - This section provides commands for performing a semantic analysis, viewing results, and validating discrepancies using the defrag tool, with an optional model override, which aligns with the code concept of performing semantic analysis using a language model provider.
 

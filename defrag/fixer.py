@@ -7,7 +7,7 @@ Inserts code references based on semantic matches.
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .llm import LLMClient
 from .semantic import Concept, SemanticIndex
@@ -748,6 +748,8 @@ def fix_all_documents(
     dry_run: bool = False,
     min_confidence: float = 0.7,
     verbose: bool = False,
+    skip_callback: Optional[Callable[[str], bool]] = None,
+    on_doc_processed: Optional[Callable[[str, List[str]], None]] = None,
 ) -> dict:
     """
     Auto-fix all documents with missing references.
@@ -758,6 +760,8 @@ def fix_all_documents(
         dry_run: If True, don't write changes
         min_confidence: Minimum confidence to auto-fix
         verbose: Print changes
+        skip_callback: Optional callable to skip specific documents (for resume)
+        on_doc_processed: Optional callable invoked after each doc is processed
 
     Returns:
         Dictionary with doc_path -> list of changes
@@ -778,6 +782,11 @@ def fix_all_documents(
         print()
 
     for doc_path in sorted(docs_with_matches):
+        if skip_callback and skip_callback(doc_path):
+            if verbose:
+                print(f"Skipping {doc_path} (already processed)")
+            continue
+
         if verbose:
             print(f"Fixing {doc_path}...")
 
@@ -795,6 +804,9 @@ def fix_all_documents(
 
         if verbose:
             print()
+
+        if on_doc_processed:
+            on_doc_processed(doc_path, changes)
 
     return all_changes
 

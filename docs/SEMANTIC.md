@@ -225,6 +225,11 @@ python -m tools.defrag semantic-analyze \
   --verbose
 ```
 
+If a run stops midway, re-run with `--resume` (same root/output path) to reuse the
+existing index. Defrag persists SHA256 hashes for each analyzed file, so only
+docs or code that changed are reprocessed and any unfinished matching or
+validation work is completed without repeating earlier LLM calls.
+
 This will:
 1. Scan all markdown files
 2. Extract concepts using LLM
@@ -326,6 +331,9 @@ python -m tools.defrag semantic-fix --doc docs/FAQ.md
 
 # Apply fixes
 python -m tools.defrag semantic-fix --doc docs/FAQ.md --apply
+
+# Resume after a failure (skips docs already updated)
+python -m tools.defrag semantic-fix --apply --resume
 ```
 
 Output:
@@ -370,6 +378,11 @@ See `ingest/iot_rule/exploder_lambda/handler.py:177-208` - FAQ explains deduplic
 - Only fixes high confidence matches (>= 0.7)
 - Adjustable via `--min-confidence`
 - Preview mode shows what would change
+
+Resume mode (`--resume`) reuses `.defrag_fix_state.json` together with the
+existing `semantic_index.json` so already rewritten documents are skipped and
+conceptual docs are not regenerated for code clusters processed before an
+interruption.
 
 See `defrag/fixer.py:525-572` - The section explains how the `semantic-fix` command automatically inserts references into documentation, which aligns with the code concept of inserting a code reference into a markdown document.
 

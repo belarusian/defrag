@@ -6,7 +6,7 @@ purpose of code that has no documentation, with code as leaf nodes.
 """
 
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 import logging
 import re
 
@@ -22,6 +22,7 @@ class ConceptualDocGenerator:
     def __init__(self, llm_client: LLMClient, root_dir: str = "."):
         self.llm = llm_client
         self.root_dir = Path(root_dir).resolve()
+        self.last_generated_clusters: Dict[str, List[str]] = {}
 
     @staticmethod
     def sanitize_filename(filename: str) -> str:
@@ -575,7 +576,8 @@ JSON only."""
             for theme in clusters:
                 print(f"  - {theme} ({len(clusters[theme])} concepts)")
 
-        generated_docs = {}
+        generated_docs: Dict[str, str] = {}
+        cluster_map: Dict[str, List[str]] = {}
 
         # Generate conceptual doc for each cluster
         for theme, concepts in clusters.items():
@@ -591,10 +593,12 @@ JSON only."""
             doc_content, filename = self.generate_conceptual_doc(theme, concepts)
             doc_path = f"docs/{filename}"
             generated_docs[doc_path] = doc_content
+            cluster_map[doc_path] = [c.id for c in concepts if isinstance(c, Concept)]
 
             if verbose:
                 print(f"  → {doc_path}")
 
+        self.last_generated_clusters = cluster_map
         return generated_docs
 
     def write_generated_docs(
@@ -603,6 +607,7 @@ JSON only."""
         root_dir: str = ".",
         dry_run: bool = False,
         verbose: bool = False,
+        tracking_map: Optional[Dict[str, List[str]]] = None,
     ) -> List[str]:
         """
         Write generated documentation to files with security protections.
@@ -640,6 +645,7 @@ JSON only."""
                     f"Security: Path traversal detected. Attempted to write to: {full_path}"
                 )
 
+            original_path = doc_path
             # Check if file already exists
             if full_path.exists():
                 if dry_run:
@@ -656,6 +662,8 @@ JSON only."""
                         full_path = full_path.parent / new_name
                         doc_path = f"docs/{new_name}"
                         counter += 1
+                    if tracking_map is not None and original_path in tracking_map:
+                        tracking_map[doc_path] = tracking_map.pop(original_path)
                     if verbose:
                         print(f"  File exists, using alternative name: {doc_path}")
 
@@ -675,6 +683,8 @@ JSON only."""
                     print(f"  Created {doc_path}")
 
             written_files.append(doc_path)
+            if tracking_map is not None and original_path in tracking_map and doc_path != original_path:
+                tracking_map.setdefault(doc_path, tracking_map.pop(original_path))
 
         return written_files
 
@@ -686,7 +696,8 @@ def generate_conceptual_docs_for_undocumented_code(
     min_confidence: float = 0.5,
     dry_run: bool = False,
     verbose: bool = False,
-) -> Dict[str, str]:
+    skip_concept_ids: Optional[Set[str]] = None,
+) -> Tuple[Dict[str, str], Dict[str, List[str]]]:
     """
     Generate conceptual documentation for all undocumented code.
 
@@ -702,7 +713,9 @@ def generate_conceptual_docs_for_undocumented_code(
         verbose: Print progress
 
     Returns:
-        Dict of generated documentation (path -> content)
+        Tuple of:
+            - Dict of generated documentation (path -> content)
+            - Dict mapping doc path to concept IDs included in that doc
     """
     # Find undocumented code
     code_concepts = semantic_index.get_code_concepts()
@@ -713,10 +726,13 @@ def generate_conceptual_docs_for_undocumented_code(
         c for c in code_concepts if isinstance(c, Concept) and c.id not in matched_code_ids
     ]
 
+    if skip_concept_ids:
+        undocumented = [c for c in undocumented if c.id not in skip_concept_ids]
+
     if not undocumented:
         if verbose:
             print("No undocumented code found!")
-        return {}
+        return {}, {}
 
     if verbose:
         print(f"Found {len(undocumented)} undocumented code concepts")
@@ -727,6 +743,13 @@ def generate_conceptual_docs_for_undocumented_code(
 
     # Write to files
     if generated_docs:
-        generator.write_generated_docs(generated_docs, root_dir, dry_run, verbose)
+        generator.write_generated_docs(
+            generated_docs,
+            root_dir,
+            dry_run,
+            verbose,
+            tracking_map=generator.last_generated_clusters,
+        )
 
-    return generated_docs
+    concept_map = dict(generator.last_generated_clusters)
+    return generated_docs, concept_map

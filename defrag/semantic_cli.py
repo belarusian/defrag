@@ -5,6 +5,8 @@ Commands for LLM-based semantic analysis.
 """
 
 import os
+import json
+from typing import List
 
 from .analyzer import SemanticAnalyzer
 from .autodoc import generate_conceptual_docs_for_undocumented_code
@@ -17,6 +19,106 @@ from .intelligent_scanner import scan_intelligently
 
 
 DEFAULT_SEMANTIC_INDEX = "semantic_index.json"
+
+
+class FixResumeState:
+    """Persist progress for semantic-fix so runs can resume after failure."""
+
+    FILENAME = ".defrag_fix_state.json"
+
+    def __init__(self, root_dir: str, enabled: bool):
+        self.enabled = enabled
+        self.root_dir = root_dir
+        self.path = os.path.join(root_dir, self.FILENAME)
+        self.docs_completed = set()
+        self.code_processed = set()
+        self.generated_docs = set()
+        self._loaded = False
+
+        if not enabled:
+            # Starting fresh; remove any stale state
+            if os.path.exists(self.path):
+                try:
+                    os.remove(self.path)
+                except OSError:
+                    pass
+            return
+
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, ValueError, json.JSONDecodeError):
+                # Corrupt state: treat as empty but keep file for troubleshooting
+                return
+            self.docs_completed = set(data.get("docs_completed", []))
+            self.code_processed = set(data.get("code_processed", []))
+            self.generated_docs = set(data.get("generated_docs", []))
+            self._loaded = True
+
+    def save(self) -> None:
+        if not self.enabled:
+            return
+        payload = {
+            "version": 1,
+            "docs_completed": sorted(self.docs_completed),
+            "code_processed": sorted(self.code_processed),
+            "generated_docs": sorted(self.generated_docs),
+        }
+        tmp_path = f"{self.path}.tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            os.replace(tmp_path, self.path)
+        except OSError:
+            # Best effort – if we can't persist, resume will restart from scratch
+            pass
+
+    def is_doc_completed(self, doc_path: str) -> bool:
+        return doc_path in self.docs_completed
+
+    def record_doc(self, doc_path: str) -> None:
+        if not self.enabled:
+            return
+        if doc_path not in self.docs_completed:
+            self.docs_completed.add(doc_path)
+            self.save()
+
+    def should_skip_concept(self, concept_id: str) -> bool:
+        return concept_id in self.code_processed
+
+    def record_concepts(self, concept_ids: List[str]) -> None:
+        if not self.enabled or not concept_ids:
+            return
+        changed = False
+        for cid in concept_ids:
+            if cid not in self.code_processed:
+                self.code_processed.add(cid)
+                changed = True
+        if changed:
+            self.save()
+
+    def record_generated_doc(self, doc_path: str) -> None:
+        if not self.enabled:
+            return
+        if doc_path not in self.generated_docs:
+            self.generated_docs.add(doc_path)
+            self.save()
+
+    def clear(self) -> None:
+        if self.enabled and os.path.exists(self.path):
+            try:
+                os.remove(self.path)
+            except OSError:
+                pass
+        self.docs_completed.clear()
+        self.code_processed.clear()
+        self.generated_docs.clear()
+        self._loaded = False
+
+    @property
+    def was_loaded(self) -> bool:
+        return self._loaded
 
 
 def _resolve_index_path(index_arg, root_dir):
@@ -48,6 +150,18 @@ def cmd_semantic_analyze(args):
     print(f"Progress log: {progress.log_path}")
     print()
 
+    # Determine resume path
+    output_path = _resolve_index_path(args.output, args.root)
+    resume_flag = getattr(args, "resume", False)
+    resume_from = output_path if resume_flag else None
+
+    if resume_flag:
+        if os.path.exists(output_path):
+            print(f"Resume mode: will load existing index from {output_path}")
+        else:
+            print(f"Resume mode: no existing index found at {output_path}, starting fresh")
+            resume_from = None
+
     # Initialize
     try:
         progress.log("Initializing LLM client...")
@@ -57,7 +171,7 @@ def cmd_semantic_analyze(args):
             api_key=args.api_key,
             root_dir=args.root,
         )
-        analyzer = SemanticAnalyzer(llm, root_dir=args.root)
+        analyzer = SemanticAnalyzer(llm, root_dir=args.root, resume_from=resume_from)
         progress.log("LLM client ready")
     except Exception as e:
         progress.log(f"ERROR: {e}")
@@ -154,7 +268,6 @@ def cmd_semantic_analyze(args):
 
     # Save index to target repo
     progress.log("Saving semantic index...")
-    output_path = _resolve_index_path(args.output, args.root)
     analyzer.index.save(output_path)
     progress.log(f"Index saved to {output_path}")
     print(f"\nSemantic index saved: {output_path}")
@@ -331,8 +444,27 @@ def cmd_semantic_fix(args):
             print(f"\nHint: Set {key_env} environment variable or pass --api-key")
         return 1
 
+    resume_flag = getattr(args, "resume", False)
+    resume_state = FixResumeState(args.root, True)
+    if resume_flag:
+        if not resume_state.was_loaded:
+            print("Resume mode: no previous fix state found; starting fresh")
+    elif resume_state.was_loaded:
+        # Discard stale progress when starting a fresh run
+        resume_state.clear()
+
     # Part 1: Fix existing documentation (add missing links)
     print("Step 1: Fixing missing links in existing documentation...")
+    processed_docs: List[str] = []
+
+    def _should_skip_doc(doc_path: str) -> bool:
+        return resume_flag and resume_state.is_doc_completed(doc_path)
+
+    def _record_doc_progress(doc_path: str, changes: List[str]) -> None:
+        resume_state.record_doc(doc_path)
+        if doc_path not in processed_docs:
+            processed_docs.append(doc_path)
+
     all_changes = fix_all_documents(
         index,
         llm,
@@ -340,6 +472,8 @@ def cmd_semantic_fix(args):
         dry_run=not args.apply,
         min_confidence=args.min_confidence,
         verbose=False,
+        skip_callback=_should_skip_doc,
+        on_doc_processed=_record_doc_progress,
     )
 
     link_fixes = sum(len(changes) for changes in all_changes.values())
@@ -350,17 +484,25 @@ def cmd_semantic_fix(args):
     else:
         print("  No missing links to fix")
 
+    if processed_docs:
+        analyzer = SemanticAnalyzer(llm, root_dir=args.root)
+        analyzer.index = index
+        analyzer.validate_with_physical_links(verbose=False)
+        index.save(index_path)
+
     # Part 2: Generate conceptual documentation for undocumented code
     print("\nStep 2: Generating conceptual documentation for undocumented code...")
 
     # Generate conceptual docs for undocumented code
-    generated_docs = generate_conceptual_docs_for_undocumented_code(
+    skip_concepts = resume_state.code_processed if resume_flag else None
+    generated_docs, concept_map = generate_conceptual_docs_for_undocumented_code(
         index,
         llm,
         args.root,
         min_confidence=args.min_confidence,
         dry_run=not args.apply,
         verbose=False,
+        skip_concept_ids=skip_concepts,
     )
 
     if generated_docs:
@@ -369,6 +511,9 @@ def cmd_semantic_fix(args):
         print(f"  {action} {doc_count} conceptual documentation file(s):")
         for doc_path in sorted(generated_docs.keys()):
             print(f"    - {doc_path}")
+            resume_state.record_generated_doc(doc_path)
+            resume_state.record_concepts(concept_map.get(doc_path, []))
+        index.save(index_path)
     else:
         print("  All code is already documented")
 
@@ -387,6 +532,8 @@ def cmd_semantic_fix(args):
             )
     else:
         print("Documentation and code are in sync - no fixes needed")
+
+    resume_state.clear()
 
     return 0
 
@@ -420,6 +567,11 @@ def add_semantic_commands(subparsers, parent_parser):
     )
     parser_analyze.add_argument(
         "--output", default=DEFAULT_SEMANTIC_INDEX, help="Output file for semantic index"
+    )
+    parser_analyze.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from existing index (skips already-processed files)",
     )
     parser_analyze.add_argument("--limit-docs", type=int, help="Limit number of docs (for testing)")
     parser_analyze.add_argument(
@@ -480,6 +632,11 @@ def add_semantic_commands(subparsers, parent_parser):
     parser_fix.add_argument(
         "--api-key",
         help="API key for LLM provider",
+    )
+    parser_fix.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume a previous semantic-fix run (skips completed docs and generated concepts)",
     )
 
     return {

@@ -5,6 +5,7 @@ Extracts conceptual meaning from documentation and code,
 enabling intelligent matching beyond physical links.
 """
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass, field
@@ -66,6 +67,7 @@ class ConceptMatch:
     suggested_link: Optional[str] = None  # Recommended physical reference
     context_needed: Optional[dict] = None  # What additional context LLM needs
     iterations: int = 1  # Number of analysis iterations
+    validated: bool = False  # Whether physical validation has been performed
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -78,11 +80,12 @@ class ConceptMatch:
             "suggested_link": self.suggested_link,
             "context_needed": self.context_needed,
             "iterations": self.iterations,
+            "validated": self.validated,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ConceptMatch":
-        """Create from dictionary."""
+        """Create from dictionary (backwards compatible)."""
         return cls(
             code_concept_id=data["code_concept_id"],
             doc_concept_id=data["doc_concept_id"],
@@ -92,6 +95,7 @@ class ConceptMatch:
             suggested_link=data.get("suggested_link"),
             context_needed=data.get("context_needed"),
             iterations=data.get("iterations", 1),
+            validated=data.get("validated", False),  # Default for old indexes
         )
 
 
@@ -101,6 +105,7 @@ class SemanticIndex:
 
     concepts: Dict[str, Concept] = field(default_factory=dict)
     matches: List[ConceptMatch] = field(default_factory=list)
+    metadata: Dict[str, any] = field(default_factory=lambda: {"version": "1.0"})
 
     def add_concept(self, concept: Concept) -> None:
         """Add or update a concept."""
@@ -147,17 +152,59 @@ class SemanticIndex:
                 unmatched.add(concept.source)
         return sorted(unmatched)
 
+    def get_file_hash(self, filepath: str) -> Optional[str]:
+        """Get stored hash for a file."""
+        if "file_hashes" not in self.metadata:
+            return None
+        return self.metadata["file_hashes"].get(filepath)
+
+    def update_file_hash(self, filepath: str, hash_value: str) -> None:
+        """Store hash for a file."""
+        if "file_hashes" not in self.metadata:
+            self.metadata["file_hashes"] = {}
+        self.metadata["file_hashes"][filepath] = hash_value
+
+    def remove_concepts_for_file(self, filepath: str, source_type: str) -> None:
+        """Remove all concepts for a specific file (used when file changes)."""
+        # Remove concepts
+        concepts_to_remove = [
+            cid
+            for cid, c in self.concepts.items()
+            if c.source == filepath and c.source_type == source_type
+        ]
+        for cid in concepts_to_remove:
+            del self.concepts[cid]
+
+        # Remove matches involving those concepts
+        if source_type == "code":
+            self.matches = [m for m in self.matches if m.code_concept_id not in concepts_to_remove]
+        else:  # doc
+            self.matches = [m for m in self.matches if m.doc_concept_id not in concepts_to_remove]
+
     def to_dict(self) -> dict:
         """Convert to dictionary."""
         return {
+            "version": self.metadata.get("version", "1.0"),
+            "metadata": self.metadata,
             "concepts": {cid: c.to_dict() for cid, c in self.concepts.items()},
             "matches": [m.to_dict() for m in self.matches],
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "SemanticIndex":
-        """Create from dictionary."""
+        """Create from dictionary (backwards compatible)."""
         index = cls()
+
+        # Load metadata (backwards compatible with old indexes)
+        if "metadata" in data:
+            index.metadata = data["metadata"]
+        elif "version" in data:
+            # Old format: version at top level
+            index.metadata = {"version": data["version"]}
+        else:
+            # Very old format: no version
+            index.metadata = {"version": "1.0"}
+
         for cid, cdata in data.get("concepts", {}).items():
             index.concepts[cid] = Concept.from_dict(cdata)
         for mdata in data.get("matches", []):
@@ -165,10 +212,16 @@ class SemanticIndex:
         return index
 
     def save(self, path: str) -> None:
-        """Save semantic index to JSON file."""
+        """Save semantic index to JSON file atomically."""
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+
+        # Write to temporary file first
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
+
+        # Atomic rename (POSIX guarantees atomicity)
+        os.replace(tmp_path, path)
 
     @classmethod
     def load(cls, path: str) -> "SemanticIndex":
@@ -236,3 +289,25 @@ def make_concept_id(source: str, source_type: str, location: str) -> str:
     # Normalize location (remove special chars, lowercase)
     location_safe = location.replace(" ", "_").replace("/", "_").lower()
     return f"{source_type}:{source}:{location_safe}"
+
+
+def compute_file_hash(filepath: str, root_dir: str = ".") -> Optional[str]:
+    """
+    Compute SHA256 hash of file content.
+
+    Args:
+        filepath: Relative path to file
+        root_dir: Root directory
+
+    Returns:
+        Hex digest of file hash, or None if file doesn't exist
+    """
+    full_path = os.path.join(root_dir, filepath)
+    if not os.path.exists(full_path):
+        return None
+
+    try:
+        with open(full_path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except (IOError, OSError):
+        return None

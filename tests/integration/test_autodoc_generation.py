@@ -128,7 +128,7 @@ The system provides REST API endpoints for data processing.
         analyzer.match_all_concepts()
 
         # Generate conceptual docs for undocumented code
-        generated_docs = generate_conceptual_docs_for_undocumented_code(
+        generated_docs, _ = generate_conceptual_docs_for_undocumented_code(
             analyzer.index,
             llm,
             undocumented_codebase,
@@ -224,7 +224,7 @@ See `src/errors.py` for the implementation.
         analyzer.match_all_concepts()
 
         # Try to generate docs
-        generated_docs = generate_conceptual_docs_for_undocumented_code(
+        generated_docs, _ = generate_conceptual_docs_for_undocumented_code(
             analyzer.index,
             llm,
             undocumented_codebase,
@@ -259,7 +259,7 @@ See `src/errors.py` for the implementation.
             }
 
         high_undocumented = undocumented_ids(0.8)
-        high_threshold_docs = generate_conceptual_docs_for_undocumented_code(
+        high_threshold_docs, _ = generate_conceptual_docs_for_undocumented_code(
             analyzer.index,
             llm,
             undocumented_codebase,

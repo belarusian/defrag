@@ -49,7 +49,7 @@ class LLMClient:
             provider: LLM provider (anthropic, openai)
             root_dir: Root directory for context expansion
         """
-        provider_name = provider or os.getenv(self.PROVIDER_ENV_VAR, "anthropic")
+        provider_name = provider or os.getenv(self.PROVIDER_ENV_VAR, "openai")
         self.provider = provider_name.lower()
 
         if self.provider not in self.SUPPORTED_PROVIDERS:

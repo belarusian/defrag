@@ -26,11 +26,11 @@ def test_intelligent_discovery_real_project():
     """Integration test: Intelligent scanner discovers files in a real project structure using LLM."""
 
     # Skip if no API key is available
-    provider = os.getenv("DEFRAG_LLM_PROVIDER", "anthropic")
-    if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
-        pytest.skip("ANTHROPIC_API_KEY not set")
-    elif provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+    provider = os.getenv("DEFRAG_LLM_PROVIDER", "openai")
+    if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
         pytest.skip("OPENAI_API_KEY not set")
+    elif provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
+        pytest.skip("ANTHROPIC_API_KEY not set")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a realistic Python project structure

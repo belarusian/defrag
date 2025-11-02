@@ -22,6 +22,8 @@ def test_skip_already_processed_docs(capsys):
             keywords=["intro"],
         )
     )
+    # Add file hash to simulate it was processed
+    index.update_file_hash("README.md", "dummy_hash_123")
 
     # Save and reload to simulate resume
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -36,17 +38,19 @@ def test_skip_already_processed_docs(capsys):
 
         # Try to analyze the same doc (should skip)
         with patch("defrag.analyzer.extract_markdown_sections") as mock_extract:
-            mock_extract.return_value = [("intro", "Content", 1, 10)]
+            with patch("defrag.analyzer.compute_file_hash") as mock_hash:
+                mock_extract.return_value = [("intro", "Content", 1, 10)]
+                mock_hash.return_value = "dummy_hash_123"  # Same hash = unchanged file
 
-            analyzer.analyze_documentation(["README.md"], verbose=True)
+                analyzer.analyze_documentation(["README.md"], verbose=True)
 
-            # Should NOT have called LLM since doc was already processed
-            mock_llm.extract_doc_concept.assert_not_called()
+                # Should NOT have called LLM since doc was already processed
+                mock_llm.extract_doc_concept.assert_not_called()
 
-            # Check output
-            captured = capsys.readouterr()
-            assert "Skipping already-processed doc: README.md" in captured.out
-            assert "1 concepts" in captured.out
+                # Check output
+                captured = capsys.readouterr()
+                assert "Skipping unchanged doc: README.md" in captured.out
+                assert "1 concepts" in captured.out
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -248,6 +252,8 @@ def test_processes_new_docs_after_resume():
             keywords=["old"],
         )
     )
+    # Add file hash for old doc
+    index.update_file_hash("OLD.md", "old_hash_123")
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         tmp_path = f.name
@@ -265,21 +271,28 @@ def test_processes_new_docs_after_resume():
 
         # Analyze both old and new docs
         with patch("defrag.analyzer.extract_markdown_sections") as mock_extract:
-            def extract_side_effect(path, root):
-                if "NEW.md" in path:
-                    return [("section", "New content", 1, 10)]
-                return [("section", "Old content", 1, 10)]
+            with patch("defrag.analyzer.compute_file_hash") as mock_hash:
+                def extract_side_effect(path, root):
+                    if "NEW.md" in path:
+                        return [("section", "New content", 1, 10)]
+                    return [("section", "Old content", 1, 10)]
 
-            mock_extract.side_effect = extract_side_effect
+                def hash_side_effect(path, root):
+                    if "NEW.md" in path:
+                        return "new_hash_456"  # New file
+                    return "old_hash_123"  # Same hash as before
 
-            analyzer.analyze_documentation(["OLD.md", "NEW.md"], verbose=False)
+                mock_extract.side_effect = extract_side_effect
+                mock_hash.side_effect = hash_side_effect
 
-            # Should only call LLM for NEW.md
-            assert mock_llm.extract_doc_concept.call_count == 1
+                analyzer.analyze_documentation(["OLD.md", "NEW.md"], verbose=False)
 
-            # Should have both concepts
-            assert len(analyzer.index.concepts) == 2
-            assert "doc:OLD.md:section" in analyzer.index.concepts
-            assert "doc:NEW.md:section" in analyzer.index.concepts
+                # Should only call LLM for NEW.md
+                assert mock_llm.extract_doc_concept.call_count == 1
+
+                # Should have both concepts
+                assert len(analyzer.index.concepts) == 2
+                assert "doc:OLD.md:section" in analyzer.index.concepts
+                assert "doc:NEW.md:section" in analyzer.index.concepts
     finally:
         Path(tmp_path).unlink(missing_ok=True)

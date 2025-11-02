@@ -16,6 +16,7 @@ from .semantic import (
     Concept,
     ConceptMatch,
     SemanticIndex,
+    compute_file_hash,
     extract_markdown_sections,
     make_concept_id,
 )
@@ -81,16 +82,27 @@ class SemanticAnalyzer:
             verbose: Print progress
         """
         for doc_path in doc_paths:
+            # Compute current file hash
+            current_hash = compute_file_hash(doc_path, self.root_dir)
+            stored_hash = self.index.get_file_hash(doc_path)
+
             # Check if this file already has concepts (skip if resuming)
             existing_concepts = [
                 c for c in self.index.concepts.values()
                 if c.source_type == "doc" and c.source == doc_path
             ]
 
-            if existing_concepts:
+            # If file exists and hasn't changed, skip
+            if existing_concepts and current_hash and current_hash == stored_hash:
                 if verbose:
-                    print(f"Skipping already-processed doc: {doc_path} ({len(existing_concepts)} concepts)")
+                    print(f"Skipping unchanged doc: {doc_path} ({len(existing_concepts)} concepts)")
                 continue
+
+            # If file changed, remove old concepts before reprocessing
+            if existing_concepts and current_hash and current_hash != stored_hash:
+                if verbose:
+                    print(f"File changed, reprocessing: {doc_path}")
+                self.index.remove_concepts_for_file(doc_path, "doc")
 
             if verbose:
                 print(f"Analyzing doc: {doc_path}")
@@ -124,6 +136,10 @@ class SemanticAnalyzer:
                 if verbose:
                     print(f"  - {section_name}: {concept.description[:60]}...")
 
+            # Update file hash after successful processing
+            if current_hash:
+                self.index.update_file_hash(doc_path, current_hash)
+
     def analyze_python_file(self, file_path: str, verbose: bool = False) -> None:
         """
         Analyze Python file and extract concepts.
@@ -134,16 +150,27 @@ class SemanticAnalyzer:
             file_path: Path to Python file
             verbose: Print progress
         """
+        # Compute current file hash
+        current_hash = compute_file_hash(file_path, self.root_dir)
+        stored_hash = self.index.get_file_hash(file_path)
+
         # Check if this file already has concepts (skip if resuming)
         existing_concepts = [
             c for c in self.index.concepts.values()
             if c.source_type == "code" and c.source == file_path
         ]
 
-        if existing_concepts:
+        # If file exists and hasn't changed, skip
+        if existing_concepts and current_hash and current_hash == stored_hash:
             if verbose:
-                print(f"  Skipping already-processed: {file_path} ({len(existing_concepts)} concepts)")
+                print(f"  Skipping unchanged: {file_path} ({len(existing_concepts)} concepts)")
             return
+
+        # If file changed, remove old concepts before reprocessing
+        if existing_concepts and current_hash and current_hash != stored_hash:
+            if verbose:
+                print(f"  File changed, reprocessing: {file_path}")
+            self.index.remove_concepts_for_file(file_path, "code")
 
         full_path = os.path.join(self.root_dir, file_path)
 
@@ -194,6 +221,10 @@ class SemanticAnalyzer:
 
                 if verbose:
                     print(f"  - {location}: {concept.description[:60]}...")
+
+        # Update file hash after successful processing
+        if current_hash:
+            self.index.update_file_hash(file_path, current_hash)
 
     def analyze_code_files(self, code_paths: List[str], verbose: bool = False) -> None:
         """

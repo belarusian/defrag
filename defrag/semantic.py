@@ -5,6 +5,7 @@ Extracts conceptual meaning from documentation and code,
 enabling intelligent matching beyond physical links.
 """
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass, field
@@ -151,6 +152,35 @@ class SemanticIndex:
                 unmatched.add(concept.source)
         return sorted(unmatched)
 
+    def get_file_hash(self, filepath: str) -> Optional[str]:
+        """Get stored hash for a file."""
+        if "file_hashes" not in self.metadata:
+            return None
+        return self.metadata["file_hashes"].get(filepath)
+
+    def update_file_hash(self, filepath: str, hash_value: str) -> None:
+        """Store hash for a file."""
+        if "file_hashes" not in self.metadata:
+            self.metadata["file_hashes"] = {}
+        self.metadata["file_hashes"][filepath] = hash_value
+
+    def remove_concepts_for_file(self, filepath: str, source_type: str) -> None:
+        """Remove all concepts for a specific file (used when file changes)."""
+        # Remove concepts
+        concepts_to_remove = [
+            cid
+            for cid, c in self.concepts.items()
+            if c.source == filepath and c.source_type == source_type
+        ]
+        for cid in concepts_to_remove:
+            del self.concepts[cid]
+
+        # Remove matches involving those concepts
+        if source_type == "code":
+            self.matches = [m for m in self.matches if m.code_concept_id not in concepts_to_remove]
+        else:  # doc
+            self.matches = [m for m in self.matches if m.doc_concept_id not in concepts_to_remove]
+
     def to_dict(self) -> dict:
         """Convert to dictionary."""
         return {
@@ -259,3 +289,25 @@ def make_concept_id(source: str, source_type: str, location: str) -> str:
     # Normalize location (remove special chars, lowercase)
     location_safe = location.replace(" ", "_").replace("/", "_").lower()
     return f"{source_type}:{source}:{location_safe}"
+
+
+def compute_file_hash(filepath: str, root_dir: str = ".") -> Optional[str]:
+    """
+    Compute SHA256 hash of file content.
+
+    Args:
+        filepath: Relative path to file
+        root_dir: Root directory
+
+    Returns:
+        Hex digest of file hash, or None if file doesn't exist
+    """
+    full_path = os.path.join(root_dir, filepath)
+    if not os.path.exists(full_path):
+        return None
+
+    try:
+        with open(full_path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except (IOError, OSError):
+        return None

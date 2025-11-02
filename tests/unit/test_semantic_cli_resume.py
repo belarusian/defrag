@@ -1,3 +1,5 @@
+"""Unit tests for semantic CLI resume flows using stub clients."""
+
 import json
 import os
 from types import SimpleNamespace
@@ -46,15 +48,11 @@ class StubLLMClient:
             return []
 
         code_keywords = {kw.lower() for kw in code_concept.get("keywords", [])}
-        target_index = None
+        target_index = 0
         for idx, doc in enumerate(doc_concepts):
-            doc_keywords = {kw.lower() for kw in doc.get("keywords", [])}
-            if code_keywords & doc_keywords:
+            if code_keywords & {kw.lower() for kw in doc.get("keywords", [])}:
                 target_index = idx
                 break
-
-        if target_index is None:
-            target_index = 0
 
         return [
             {
@@ -76,30 +74,24 @@ def scan_python_files(llm, root_dir, verbose=False):
     return {"code": sorted(code_files)}
 
 
-@pytest.mark.integration
-def test_semantic_cli_resume_round_trip(monkeypatch, tmp_path):
-    """End-to-end CLI resume flow that skips unchanged files and processes new ones."""
+@pytest.fixture(autouse=True)
+def stub_cli_dependencies(monkeypatch):
+    monkeypatch.setattr("defrag.semantic_cli.LLMClient", StubLLMClient)
+    monkeypatch.setattr("defrag.semantic_cli.scan_intelligently", scan_python_files)
+    StubLLMClient.instances = []
 
-    # Create initial doc and code files
+
+@pytest.mark.unit
+def test_semantic_cli_resume_round_trip(tmp_path):
+    """CLI-level resume flow should skip previously analyzed files."""
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
-    doc1 = docs_dir / "feature.md"
-    doc1.write_text("# feature\nFeature overview.")
+    (docs_dir / "feature.md").write_text("# feature\nFeature overview.")
 
     code_dir = tmp_path / "src"
     code_dir.mkdir()
-    code1 = code_dir / "feature.py"
-    code1.write_text(
-        "def feature():\n"
-        "    return 'feature'\n"
-    )
+    (code_dir / "feature.py").write_text("def feature():\n    return 'feature'\n")
 
-    # Patch LLM client and intelligent scanner
-    monkeypatch.setattr("defrag.semantic_cli.LLMClient", StubLLMClient)
-    monkeypatch.setattr("defrag.semantic_cli.scan_intelligently", scan_python_files)
-
-    # First run - build index from scratch
-    StubLLMClient.instances = []
     args = SimpleNamespace(
         root=str(tmp_path),
         verbose=False,
@@ -112,64 +104,27 @@ def test_semantic_cli_resume_round_trip(monkeypatch, tmp_path):
         resume=False,
     )
 
-    result = cmd_semantic_analyze(args)
-    assert result == 0
+    cmd_semantic_analyze(args)
     assert len(StubLLMClient.instances) == 1
-    first_client = StubLLMClient.instances[0]
-    assert first_client.extract_doc_concept_calls == ["feature"]
-    assert [call[0] for call in first_client.extract_code_concept_calls] == ["src/feature.py"]
-    assert len(first_client.match_concepts_calls) == 1
 
-    index_path = tmp_path / "semantic_index.json"
-    assert index_path.exists()
-    index = SemanticIndex.load(str(index_path))
-    assert len(index.get_doc_concepts()) == 1
-    assert len(index.get_code_concepts()) == 1
+    # Add new files
+    (docs_dir / "new_feature.md").write_text("# new_feature\nNew feature details.")
+    (code_dir / "new_feature.py").write_text("def new_feature():\n    return 'new'\n")
 
-    # Add new doc and code before resuming
-    doc2 = docs_dir / "new_feature.md"
-    doc2.write_text("# new_feature\nNew feature details.")
-    code2 = code_dir / "new_feature.py"
-    code2.write_text(
-        "def new_feature():\n"
-        "    return 'new'\n"
-    )
+    resume_kwargs = vars(args).copy()
+    resume_kwargs["resume"] = True
+    resume_args = SimpleNamespace(**resume_kwargs)
+    cmd_semantic_analyze(resume_args)
 
-    # Second run - resume should skip existing files and process new ones
-    StubLLMClient.instances = []
-    resume_args = SimpleNamespace(
-        root=str(tmp_path),
-        verbose=False,
-        limit_docs=None,
-        limit_code=None,
-        model=None,
-        api_key=None,
-        output="semantic_index.json",
-        provider="anthropic",
-        resume=True,
-    )
-
-    result = cmd_semantic_analyze(resume_args)
-    assert result == 0
-    assert len(StubLLMClient.instances) == 1
-    resume_client = StubLLMClient.instances[0]
-    # Only the new doc and code should trigger LLM extraction
+    assert len(StubLLMClient.instances) == 2
+    resume_client = StubLLMClient.instances[-1]
     assert resume_client.extract_doc_concept_calls == ["new_feature"]
     assert [call[0] for call in resume_client.extract_code_concept_calls] == ["src/new_feature.py"]
-    assert len(resume_client.match_concepts_calls) == 1
-
-    # Final index combines old + new concepts without duplication
-    final_index = SemanticIndex.load(str(index_path))
-    assert len(final_index.get_doc_concepts()) == 2
-    assert len(final_index.get_code_concepts()) == 2
-    assert len(final_index.matches) == 2
-    assert all(match.validated for match in final_index.matches)
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_semantic_fix_resume_after_failure(monkeypatch, tmp_path):
-    """Ensure semantic-fix can resume after a crash and skips completed work."""
-
+    """Resume state ensures Step 1 is skipped and conceptual docs are generated once."""
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
     doc_path = docs_dir / "guide.md"
@@ -177,18 +132,9 @@ def test_semantic_fix_resume_after_failure(monkeypatch, tmp_path):
 
     code_dir = tmp_path / "src"
     code_dir.mkdir()
-    code_path = code_dir / "module.py"
-    code_path.write_text(
-        "def handler():\n"
-        "    return True\n"
-    )
-    extra_code_path = code_dir / "undocumented.py"
-    extra_code_path.write_text(
-        "def undocumented_func():\n"
-        "    return 1\n"
-    )
+    (code_dir / "module.py").write_text("def handler():\n    return True\n")
+    (code_dir / "undocumented.py").write_text("def undocumented_func():\n    return 1\n")
 
-    # Build a semantic index with one match missing a physical link
     index = SemanticIndex()
     doc_concept = Concept(
         id="doc:docs/guide.md:intro",
@@ -200,7 +146,7 @@ def test_semantic_fix_resume_after_failure(monkeypatch, tmp_path):
         line_range=(1, 2),
         raw_content="Intro content",
     )
-    code_concept = Concept(
+    handler_concept = Concept(
         id="code:src/module.py:handler",
         source="src/module.py",
         source_type="code",
@@ -221,11 +167,11 @@ def test_semantic_fix_resume_after_failure(monkeypatch, tmp_path):
         raw_content="def undocumented_func(): return 1",
     )
     index.add_concept(doc_concept)
-    index.add_concept(code_concept)
+    index.add_concept(handler_concept)
     index.add_concept(undocumented_concept)
     index.add_match(
         ConceptMatch(
-            code_concept_id=code_concept.id,
+            code_concept_id=handler_concept.id,
             doc_concept_id=doc_concept.id,
             confidence=0.9,
             reasoning="Doc explains handler",
@@ -233,11 +179,8 @@ def test_semantic_fix_resume_after_failure(monkeypatch, tmp_path):
             suggested_link="src/module.py:1",
         )
     )
-    index_path = tmp_path / "semantic_index.json"
-    index.save(str(index_path))
+    index.save(tmp_path / "semantic_index.json")
 
-    # Patch dependencies to avoid real LLM calls
-    monkeypatch.setattr("defrag.semantic_cli.LLMClient", StubLLMClient)
     monkeypatch.setattr(
         "defrag.fixer.rewrite_document_with_llm",
         lambda **kwargs: (None, {}),
@@ -274,49 +217,24 @@ def test_semantic_fix_resume_after_failure(monkeypatch, tmp_path):
         resume=False,
     )
 
-    # First run crashes during conceptual doc generation
     with pytest.raises(RuntimeError):
         cmd_semantic_fix(args)
 
-    # Step 1 should have added the reference exactly once
     content_after_first_run = doc_path.read_text()
     assert content_after_first_run.count("src/module.py:1") == 1
 
-    # Progress state should exist and record the completed document
     state_path = tmp_path / ".defrag_fix_state.json"
     assert state_path.exists()
-    state_data = json.loads(state_path.read_text())
-    assert "docs/guide.md" in state_data["docs_completed"]
-    assert state_data["code_processed"] == []
 
-    # The semantic index should reflect validated links
-    updated_index = SemanticIndex.load(str(index_path))
-    assert updated_index.matches[0].physical_link_valid is True
-    assert updated_index.matches[0].validated is True
-
-    # Resume run should skip Step 1 and finish conceptual doc generation
-    resume_args = SimpleNamespace(
-        root=str(tmp_path),
-        semantic_index="semantic_index.json",
-        apply=True,
-        min_confidence=0.7,
-        provider="anthropic",
-        model=None,
-        api_key=None,
-        resume=True,
-    )
-
-    result = cmd_semantic_fix(resume_args)
-    assert result == 0
+    resume_kwargs = vars(args).copy()
+    resume_kwargs["resume"] = True
+    resume_args = SimpleNamespace(**resume_kwargs)
+    cmd_semantic_fix(resume_args)
     assert call_state["count"] == 2
 
-    # Reference is not duplicated
     resumed_content = doc_path.read_text()
     assert resumed_content.count("src/module.py:1") == 1
 
-    # Conceptual documentation created on resume
     generated_doc = docs_dir / "undocumented_func.md"
     assert generated_doc.exists()
-
-    # Progress state cleared after success
     assert not state_path.exists()

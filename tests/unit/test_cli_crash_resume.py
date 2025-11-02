@@ -52,7 +52,9 @@ def test_resume_after_multiple_crashes(tmp_path):
     index.save(index_path)
 
     # First resume should load existing concepts without needing a real LLM
-    analyzer = SemanticAnalyzer(llm_client=MagicMock(), root_dir=str(tmp_path), resume_from=str(index_path))
+    analyzer = SemanticAnalyzer(
+        llm_client=MagicMock(), root_dir=str(tmp_path), resume_from=str(index_path)
+    )
     assert len(analyzer.index.concepts) == 1
     assert analyzer.index.matches[0].validated is True
 
@@ -60,7 +62,9 @@ def test_resume_after_multiple_crashes(tmp_path):
     analyzer.index.add_concept(_make_doc_concept("docs/doc2.md:section"))
     analyzer.index.save(str(index_path))
 
-    analyzer2 = SemanticAnalyzer(llm_client=MagicMock(), root_dir=str(tmp_path), resume_from=str(index_path))
+    analyzer2 = SemanticAnalyzer(
+        llm_client=MagicMock(), root_dir=str(tmp_path), resume_from=str(index_path)
+    )
     assert len(analyzer2.index.concepts) == 2
 
 

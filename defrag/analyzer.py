@@ -88,7 +88,8 @@ class SemanticAnalyzer:
 
             # Check if this file already has concepts (skip if resuming)
             existing_concepts = [
-                c for c in self.index.concepts.values()
+                c
+                for c in self.index.concepts.values()
                 if c.source_type == "doc" and c.source == doc_path
             ]
 
@@ -156,7 +157,8 @@ class SemanticAnalyzer:
 
         # Check if this file already has concepts (skip if resuming)
         existing_concepts = [
-            c for c in self.index.concepts.values()
+            c
+            for c in self.index.concepts.values()
             if c.source_type == "code" and c.source == file_path
         ]
 
@@ -275,7 +277,9 @@ class SemanticAnalyzer:
             # Skip if already matched (resuming)
             if code_concept.id in already_matched:
                 if verbose:
-                    print(f"\nSkipping already-matched: {code_concept.source}:{code_concept.location}")
+                    print(
+                        f"\nSkipping already-matched: {code_concept.source}:{code_concept.location}"
+                    )
                 continue
 
             if verbose:

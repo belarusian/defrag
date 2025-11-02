@@ -683,7 +683,11 @@ JSON only."""
                     print(f"  Created {doc_path}")
 
             written_files.append(doc_path)
-            if tracking_map is not None and original_path in tracking_map and doc_path != original_path:
+            if (
+                tracking_map is not None
+                and original_path in tracking_map
+                and doc_path != original_path
+            ):
                 tracking_map.setdefault(doc_path, tracking_map.pop(original_path))
 
         return written_files

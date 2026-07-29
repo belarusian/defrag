@@ -13,7 +13,6 @@ import yaml
 from .schema import DefragIndex, DocEntry, DocStatus
 from .scanner import scan_documentation, scan_code_references
 
-
 DEFAULT_INDEX_PATH = "docs_index.yaml"
 
 

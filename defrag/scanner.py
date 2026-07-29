@@ -9,7 +9,6 @@ import re
 from pathlib import Path
 from typing import List, Set
 
-
 # Pattern to match code references in documentation
 # Formats:
 #   path/to/file.py:123

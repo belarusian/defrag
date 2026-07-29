@@ -17,7 +17,6 @@ from .scanner import scan_documentation
 from .semantic import SemanticIndex
 from .intelligent_scanner import scan_intelligently
 
-
 DEFAULT_SEMANTIC_INDEX = "semantic_index.json"
 
 

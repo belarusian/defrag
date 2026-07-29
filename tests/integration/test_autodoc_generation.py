@@ -40,8 +40,7 @@ class TestAutoDocGeneration:
 
             # Cache implementation (undocumented)
             cache_file = code_dir / "cache.py"
-            cache_file.write_text(
-                '''
+            cache_file.write_text('''
 class CacheManager:
     """In-memory cache for performance optimization."""
 
@@ -65,13 +64,11 @@ def get_cached_result(key):
     """Helper to get cached computation result."""
     manager = CacheManager()
     return manager.get(key)
-'''
-            )
+''')
 
             # Error handling (undocumented)
             error_file = code_dir / "errors.py"
-            error_file.write_text(
-                '''
+            error_file.write_text('''
 class ApplicationError(Exception):
     """Base application error."""
     pass
@@ -96,8 +93,7 @@ def handle_error(error, logger=None):
         return {"error": "application_error", "message": str(error)}
     else:
         return {"error": "unknown_error"}
-'''
-            )
+''')
 
             # Create minimal existing documentation
             docs_dir = Path(tmpdir) / "docs"
@@ -105,14 +101,12 @@ def handle_error(error, logger=None):
 
             # Only document the API endpoints, not the cache or error handling
             api_doc = docs_dir / "api.md"
-            api_doc.write_text(
-                """# API Documentation
+            api_doc.write_text("""# API Documentation
 
 ## Endpoints
 
 The system provides REST API endpoints for data processing.
-"""
-            )
+""")
 
             yield tmpdir
 
@@ -195,25 +189,21 @@ The system provides REST API endpoints for data processing.
 
         # Add documentation that covers the cache
         cache_doc = docs_dir / "caching.md"
-        cache_doc.write_text(
-            """# Caching Strategy
+        cache_doc.write_text("""# Caching Strategy
 
 The system uses an in-memory cache for performance optimization.
 
 See `src/cache.py` for the implementation.
-"""
-        )
+""")
 
         # Add documentation that covers error handling
         error_doc = docs_dir / "error-handling.md"
-        error_doc.write_text(
-            """# Error Handling
+        error_doc.write_text("""# Error Handling
 
 Central error handling and validation logic.
 
 See `src/errors.py` for the implementation.
-"""
-        )
+""")
 
         # Initialize and analyze
         llm = get_test_llm_client()

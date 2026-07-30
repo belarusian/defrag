@@ -13,9 +13,9 @@ from .schema import DefragIndex, DocEntry
 from .validator import validate_code_refs, validate_doc
 
 __all__ = [
-    "build_index",
     "DefragIndex",
     "DocEntry",
+    "build_index",
     "load_index",
     "save_index",
     "scan_code_references",

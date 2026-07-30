@@ -221,21 +221,6 @@ See `examples/` for:
 - `simple_demo.py` - Basic usage
 - `ci_integration.py` - GitHub Actions integration
 
-## Cost Estimation
-
-LLM API calls for full analysis:
-- Document concepts: ~1 call per section
-- Code concepts: ~1 call per function/class
-- Matching: ~1 call per code concept
-
-**Typical project** (200 doc sections, 500 functions):
-- Total calls: ~1200
-- Claude 3.5 Sonnet cost: ~$13-15
-- One-time cost, results cached
-
-**Testing mode** (use `--limit-docs 5 --limit-code 10`):
-- Cost: ~$0.50
-
 ## Requirements
 
 - Python 3.8+
@@ -251,7 +236,7 @@ Contributions welcome! See `CONTRIBUTING.md`.
 
 ## Authors
 
-Built by [Kode-S](https://github.com/kode-s)
+Built by [belarusian](https://github.com/belarusian)
 
 ---
 

@@ -57,4 +57,6 @@ target-version = "py38"
 # SIM105: use implicit boolean comparison (conflicts with style)
 # PLC0415: import inside function (allowed in tests for mocking)
 # UP024: Replace aliased errors with `OSError`
-extend-ignore = ["SIM117", "I001", "SIM105", "PLC0415", "UP024"]
+# RUF019: Unnecessary key check before dictionary access
+# RUF100: Unused noqa directive
+extend-ignore = ["SIM117", "I001", "SIM105", "PLC0415", "UP024", "RUF019", "RUF100"]

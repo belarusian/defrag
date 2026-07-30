@@ -131,7 +131,8 @@ def cmd_semantic_analyze(args):
     """Run full semantic analysis on codebase and documentation."""
     print("=== Semantic Analysis ===")
     print(f"Root: {args.root}")
-    provider = (args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR, "anthropic")).lower()
+    provider = args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR) or "openai"
+    provider = provider.lower()
     default_model = LLMClient.DEFAULT_MODELS.get(provider, "unknown")
     print(f"Provider: {provider}")
     if args.model:
@@ -428,7 +429,8 @@ def cmd_semantic_fix(args):
     if not args.apply:
         print("[DRY RUN] Use --apply to write changes\n")
 
-    provider = (args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR, "anthropic")).lower()
+    provider = args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR) or "openai"
+    provider = provider.lower()
     try:
         llm = LLMClient(
             model=args.model,
@@ -554,7 +556,7 @@ def add_semantic_commands(subparsers, parent_parser):
     parser_analyze.add_argument(
         "--provider",
         choices=sorted(LLMClient.SUPPORTED_PROVIDERS),
-        help="LLM provider to use (default: env DEFRAG_LLM_PROVIDER or anthropic)",
+        help="LLM provider to use (default: env DEFRAG_LLM_PROVIDER or openai)",
     )
     parser_analyze.add_argument(
         "--model",
@@ -622,7 +624,7 @@ def add_semantic_commands(subparsers, parent_parser):
     parser_fix.add_argument(
         "--provider",
         choices=sorted(LLMClient.SUPPORTED_PROVIDERS),
-        help="LLM provider (default: env DEFRAG_LLM_PROVIDER or anthropic)",
+        help="LLM provider (default: env DEFRAG_LLM_PROVIDER or openai)",
     )
     parser_fix.add_argument(
         "--model",

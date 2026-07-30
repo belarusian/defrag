@@ -255,3 +255,33 @@ def test_request_json_parse_then_schema_retry_uses_correct_raw(monkeypatch):
     # And the final result should be valid
     assert result["description"] == "complete"
     assert result["keywords"] == ["test"]
+
+
+def test_extract_code_concept_llm_format(monkeypatch):
+    """Test that LLM-based code concept extraction works with the new format."""
+    responses = iter(
+        [
+            '{"concepts": [{"name": "process_data", "description": "Processes incoming data", "keywords": ["data", "processing"]}]}',
+        ]
+    )
+
+    client_obj, provider = make_stub_provider(send_return=lambda: next(responses))
+    monkeypatch.setattr(LLMClient, "_initialize_provider", lambda self: (client_obj, provider))
+    monkeypatch.setenv(LLMClient.PROVIDER_KEY_ENVS["openai"], "openai-key")
+    monkeypatch.setenv(LLMClient.PROVIDER_ENV_VAR, "openai")
+
+    client = LLMClient()
+
+    # Test _request_json with code response format
+    prompt = "Extract functions from this code"
+    result = client._request_json(
+        prompt,
+        max_tokens=500,
+        log_context="test code extraction",
+        validator=lambda data: client._validate_code_response(data, "test_location"),
+        schema_retry_builder=lambda parsed, issues, raw: client._build_code_retry_prompt("test_location", issues, raw),
+    )
+
+    # The response should be validated and normalized
+    assert "description" in result
+    assert "keywords" in result

@@ -29,5 +29,4 @@ jobs:
         run: |
           pip install black ruff
           black --check defrag tests examples
-          # Ruff checks disabled due to CI config resolution issues
-          # TODO: Fix ruff.toml/pyproject.toml integration on CI
+          ruff check defrag tests/examples

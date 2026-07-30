@@ -276,6 +276,7 @@ def test_processes_new_docs_after_resume():
         mock_hash_ctx = patch("defrag.analyzer.compute_file_hash")
 
         with mock_extract_ctx as mock_extract, mock_hash_ctx as mock_hash:
+
             def extract_side_effect(path, root):
                 if "NEW.md" in path:
                     return [("section", "New content", 1, 10)]

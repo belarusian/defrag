@@ -168,7 +168,7 @@ class LLMClient:
         return value[:length] + "...(truncated)"
 
     def _parse_json_content(self, raw_text: str) -> any:
-        """Parse JSON text, allowing for markdown fences."""
+        """Parse JSON text, allowing for markdown fences and fixing incomplete JSON."""
         text = (raw_text or "").strip()
         if not text:
             raise ValueError("empty response")
@@ -191,9 +191,33 @@ class LLMClient:
         if not cleaned:
             raise ValueError("empty response after stripping code fences")
 
+        # Try to parse JSON
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError as exc:
+            # Handle common cases of incomplete JSON
+            # If the error mentions "Expecting value" at start, fix with proper structure
+            if "Expecting value" in str(exc) or "Unterminated string" in str(exc):
+                # Try to salvage by adding missing closing brace/quote
+                import re
+                # Look for partial JSON patterns
+                # Pattern: {"key": "value - should become {"key": "value"}
+                if cleaned.count('{') > cleaned.count('}') and cleaned.endswith(('"', ':')):
+                    # Missing closing quote or brace
+                    last_quote = cleaned.rfind('"')
+                    if last_quote > 0:
+                        # Try to find a matching closing pattern
+                        remaining = cleaned[last_quote+1:]
+                        if not remaining.strip() or remaining.strip().startswith(','):
+                            cleaned = cleaned + '"}'
+                        else:
+                            cleaned = cleaned + '}'
+                # If still has issues, add closing brace
+                try:
+                    return json.loads(cleaned)
+                except:
+                    pass
+            
             raise ValueError(f"JSON decode error: {exc}") from exc
 
     @staticmethod
@@ -890,11 +914,54 @@ class _OpenAIProvider:
             temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
+        # Handle standard content
         content = response.choices[0].message.content
         if isinstance(content, list):
-            # Responses can return structured data; join textual parts.
             return "".join(part.get("text", "") for part in content if isinstance(part, dict))
-        return content or ""
+        if content:
+            return content
+
+        # Handle reasoning models (like o1, some Qwen variants) that use reasoning_content instead of content
+        reasoning = getattr(response.choices[0].message, "reasoning_content", None)
+        if reasoning:
+            import re
+            import json as jsn
+            
+            # First try to extract JSON from markdown code blocks (```json ... ```)
+            code_block = re.search(r'```[ja]*son\s*(.*?)\s*```', reasoning, re.DOTALL)
+            if code_block:
+                return code_block.group(1).strip()
+
+            # Try inline backtick-quoted JSON: `{"...": "..."}`
+            inline_json = re.search(r'`(\{[^`]*\})`', reasoning)
+            if inline_json:
+                return inline_json.group(1)
+
+            # Otherwise look for balanced braces - find ALL complete JSON objects
+            candidates = []
+            depth = 0
+            start_idx = -1
+            for i, c in enumerate(reasoning):
+                if c == '{':
+                    if depth == 0:
+                        start_idx = i
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if depth == 0 and start_idx >= 0:
+                        candidate = reasoning[start_idx:i+1]
+                        # Try to parse it - if valid, add to candidates
+                        try:
+                            jsn.loads(candidate)
+                            candidates.append(candidate)
+                        except:
+                            pass
+
+            # Return the longest valid JSON object found
+            if candidates:
+                return max(candidates, key=len)
+
+        return ""
 
     @staticmethod
     def _extract_response_text(response) -> str:

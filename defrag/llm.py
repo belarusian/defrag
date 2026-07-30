@@ -200,24 +200,25 @@ class LLMClient:
             if "Expecting value" in str(exc) or "Unterminated string" in str(exc):
                 # Try to salvage by adding missing closing brace/quote
                 import re
+
                 # Look for partial JSON patterns
                 # Pattern: {"key": "value - should become {"key": "value"}
-                if cleaned.count('{') > cleaned.count('}') and cleaned.endswith(('"', ':')):
+                if cleaned.count("{") > cleaned.count("}") and cleaned.endswith(('"', ":")):
                     # Missing closing quote or brace
                     last_quote = cleaned.rfind('"')
                     if last_quote > 0:
                         # Try to find a matching closing pattern
-                        remaining = cleaned[last_quote+1:]
-                        if not remaining.strip() or remaining.strip().startswith(','):
+                        remaining = cleaned[last_quote + 1 :]
+                        if not remaining.strip() or remaining.strip().startswith(","):
                             cleaned = cleaned + '"}'
                         else:
-                            cleaned = cleaned + '}'
+                            cleaned = cleaned + "}"
                 # If still has issues, add closing brace
                 try:
                     return json.loads(cleaned)
                 except:
                     pass
-            
+
             raise ValueError(f"JSON decode error: {exc}") from exc
 
     @staticmethod
@@ -926,14 +927,14 @@ class _OpenAIProvider:
         if reasoning:
             import re
             import json as jsn
-            
+
             # First try to extract JSON from markdown code blocks (```json ... ```)
-            code_block = re.search(r'```[ja]*son\s*(.*?)\s*```', reasoning, re.DOTALL)
+            code_block = re.search(r"```[ja]*son\s*(.*?)\s*```", reasoning, re.DOTALL)
             if code_block:
                 return code_block.group(1).strip()
 
             # Try inline backtick-quoted JSON: `{"...": "..."}`
-            inline_json = re.search(r'`(\{[^`]*\})`', reasoning)
+            inline_json = re.search(r"`(\{[^`]*\})`", reasoning)
             if inline_json:
                 return inline_json.group(1)
 
@@ -942,14 +943,14 @@ class _OpenAIProvider:
             depth = 0
             start_idx = -1
             for i, c in enumerate(reasoning):
-                if c == '{':
+                if c == "{":
                     if depth == 0:
                         start_idx = i
                     depth += 1
-                elif c == '}':
+                elif c == "}":
                     depth -= 1
                     if depth == 0 and start_idx >= 0:
-                        candidate = reasoning[start_idx:i+1]
+                        candidate = reasoning[start_idx : i + 1]
                         # Try to parse it - if valid, add to candidates
                         try:
                             jsn.loads(candidate)

@@ -274,7 +274,7 @@ def extract_markdown_sections(md_path: str, root_dir: str = ".") -> List[tuple]:
                 (current_section, "".join(current_content).strip(), line_start, len(lines))
             )
 
-    except (IOError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError):
         pass
 
     return sections
@@ -309,5 +309,5 @@ def compute_file_hash(filepath: str, root_dir: str = ".") -> Optional[str]:
     try:
         with open(full_path, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
-    except (IOError, OSError):
+    except OSError:
         return None

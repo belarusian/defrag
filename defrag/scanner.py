@@ -99,7 +99,7 @@ def extract_code_refs(doc_path: str) -> List[str]:
 
             refs.append(ref)
 
-    except (IOError, UnicodeDecodeError) as e:
+    except (OSError, UnicodeDecodeError) as e:
         print(f"Warning: Could not read {doc_path}: {e}")
 
     return refs
@@ -193,5 +193,5 @@ def validate_line_range(
 
         return True
 
-    except (IOError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError):
         return False

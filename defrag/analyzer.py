@@ -391,7 +391,7 @@ class SemanticAnalyzer:
                         # Doc mentions file but no specific line reference
                         match.physical_link_valid = None
 
-            except (IOError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError):
                 pass
 
             # Mark this match as validated (even if validation failed/was inconclusive)

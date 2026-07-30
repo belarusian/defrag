@@ -5,7 +5,6 @@ Uses LLM to understand code and documentation conceptually,
 then matches them and validates with physical links.
 """
 
-import ast
 import os
 import re
 from typing import Dict, List, Optional
@@ -141,14 +140,15 @@ class SemanticAnalyzer:
             if current_hash:
                 self.index.update_file_hash(doc_path, current_hash)
 
-    def analyze_python_file(self, file_path: str, verbose: bool = False) -> None:
+    def analyze_code_file_llm(self, file_path: str, verbose: bool = False) -> None:
         """
-        Analyze Python file and extract concepts.
+        Analyze code file and extract concepts using LLM.
 
         When resuming, skips files that already have concepts in the index.
+        Works for all programming languages (Python, TypeScript, Go, Java, C, Rust, etc.)
 
         Args:
-            file_path: Path to Python file
+            file_path: Path to code file
             verbose: Print progress
         """
         # Compute current file hash
@@ -182,47 +182,124 @@ class SemanticAnalyzer:
         try:
             with open(full_path, "r", encoding="utf-8") as f:
                 source = f.read()
-                tree = ast.parse(source)
-        except (SyntaxError, UnicodeDecodeError):
+        except UnicodeDecodeError:
             if verbose:
-                print(f"  Warning: Could not parse {file_path}")
+                print(f"  Warning: Could not read {file_path} (not UTF-8)")
             return
 
-        # Extract functions and classes
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                location = node.name
-                line_start = node.lineno
-                line_end = node.end_lineno or line_start
+        # Determine language from file extension
+        ext = os.path.splitext(file_path)[1].lower()
+        language_map = {
+            ".py": "Python",
+            ".ts": "TypeScript",
+            ".js": "JavaScript",
+            ".java": "Java",
+            ".go": "Go",
+            ".rs": "Rust",
+            ".c": "C",
+            ".cpp": "C++",
+            ".h": "C/C++ Header",
+            ".rb": "Ruby",
+            ".php": "PHP",
+            ".swift": "Swift",
+            ".kt": "Kotlin",
+            ".scala": "Scala",
+        }
+        language = language_map.get(ext, "code")
 
-                # Get code snippet
-                lines = source.split("\n")
-                snippet = "\n".join(lines[line_start - 1 : min(line_end, line_start + 50)])
+        # Ask LLM to extract concepts from raw source code
+        prompt = f"""Extract functions, classes, and their purposes from this {language} code.
 
-                try:
-                    concept_data = self.llm.extract_code_concept(file_path, location, snippet)
-                except ValueError as exc:
-                    if verbose:
-                        print(
-                            f"  Warning: Failed to extract concept for {file_path}:{location}: {exc}"
-                        )
-                    continue
+File: {file_path}
 
-                concept = Concept(
-                    id=make_concept_id(file_path, "code", location),
-                    source=file_path,
-                    source_type="code",
-                    location=location,
-                    description=concept_data["description"],
-                    keywords=concept_data["keywords"],
-                    line_range=(line_start, line_end),
-                    raw_content=snippet[:500],
-                )
+Code:
+{source[:10000]}  # Truncated if too long
 
-                self.index.add_concept(concept)
+For each function or class, provide:
+- name: The function or class name
+- description: What it does conceptually
+- keywords: List of relevant keywords
 
-                if verbose:
-                    print(f"  - {location}: {concept.description[:60]}...")
+Respond with JSON containing:
+{{
+    "concepts": [
+        {{
+            "name": "function_or_class_name",
+            "description": "conceptual description of what it does",
+            "keywords": ["keyword1", "keyword2"]
+        }}
+    ]
+}}
+"""
+
+        try:
+            response = self.llm._request_json(
+                prompt,
+                max_tokens=2000,
+                log_context=f"Extracting code concepts from {file_path}",
+                validator=lambda data: self._validate_code_response(data),
+                schema_retry_builder=lambda parsed, issues, raw: self._build_code_retry_prompt(
+                    file_path, issues, raw
+                ),
+            )
+        except ValueError as exc:
+            if verbose:
+                print(f"  Warning: Failed to extract concepts from {file_path}: {exc}")
+            return
+
+        concepts_data = response.get("concepts", [])
+        if not isinstance(concepts_data, list):
+            if verbose:
+                print(f"  Warning: No valid concepts found in {file_path}")
+            return
+
+        # Get lines for line ranges
+        lines = source.split("\n")
+
+        for concept_data in concepts_data:
+            if not isinstance(concept_data, dict):
+                continue
+
+            name = concept_data.get("name", "")
+            description = concept_data.get("description", "")
+            keywords = concept_data.get("keywords", [])
+
+            if not name or not description:
+                continue
+
+            # Find line numbers for this concept in the source
+            line_start = 1
+            line_end = len(lines)
+
+            # Search for the name in source to find line numbers
+            for i, line in enumerate(lines):
+                if name in line and not line.strip().startswith("#"):
+                    line_start = i + 1
+                    # Find end of function/class definition (simplified)
+                    for j in range(i, min(i + 50, len(lines))):
+                        if lines[j].strip() and not lines[j].startswith((' ', '\t')) and not lines[j].startswith('def ') and not lines[j].startswith('class ') and not lines[j].startswith('function ') and not lines[j].startswith('func '):
+                            if j > i:
+                                line_end = j
+                            break
+                    else:
+                        line_end = min(i + 50, len(lines))
+                    break
+
+            concept = Concept(
+                id=make_concept_id(file_path, "code", name),
+                source=file_path,
+                source_type="code",
+                location=name,
+                description=description,
+                keywords=keywords,
+                line_range=(line_start, line_end),
+                raw_content=source[max(0, lines[line_start-1].find(name)-50):lines[line_start-1].find(name)+50+500] if lines[line_start-1].find(name) != -1 else source[:500],
+            )
+
+            self.index.add_concept(concept)
+
+            if verbose:
+                print(f"  - {name}: {concept.description[:60]}...")
 
         # Update file hash after successful processing
         if current_hash:
@@ -232,6 +309,8 @@ class SemanticAnalyzer:
         """
         Analyze code files and extract concepts.
 
+        Works for all programming languages (Python, TypeScript, Go, Java, C, Rust, etc.)
+
         Args:
             code_paths: List of code file paths
             verbose: Print progress
@@ -240,9 +319,7 @@ class SemanticAnalyzer:
             if verbose:
                 print(f"Analyzing code: {code_path}")
 
-            if code_path.endswith(".py"):
-                self.analyze_python_file(code_path, verbose)
-            # Add support for other languages here (TypeScript, etc.)
+            self.analyze_code_file_llm(code_path, verbose)
 
     def match_all_concepts(self, verbose: bool = False, max_iterations: int = 1) -> None:
         """

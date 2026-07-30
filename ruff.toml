@@ -1,0 +1,10 @@
+line-length = 100
+target-version = "py38"
+
+# Ignore rules that require different Python syntax or break CI
+extend-ignore = [
+    "SIM117",   # nested with (requires Python 3.9+)
+    "I001",     # import sorting
+    "SIM105",   # implicit boolean comparison
+    "PLC0415",  # import inside function
+]

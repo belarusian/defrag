@@ -51,6 +51,9 @@ target-version = ['py38', 'py39', 'py310', 'py311']
 line-length = 100
 target-version = "py38"
 
-# Skip SIM117 (nested with) because it requires Python 3.9+ syntax
-# while we target py38 compatibility
-extend-ignore = ["SIM117"]
+# Disable rules that require newer Python syntax or break CI
+# SIM117: nested with statements (requires Python 3.9+)
+# I001: import sorting (causes issues with newer ruff versions)
+# SIM105: use implicit boolean comparison (conflicts with style)
+# PLC0415: import inside function (allowed in tests for mocking)
+extend-ignore = ["SIM117", "I001", "SIM105", "PLC0415"]

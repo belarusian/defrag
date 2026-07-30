@@ -29,4 +29,5 @@ jobs:
         run: |
           pip install black ruff
           black --check defrag tests examples
-          ruff check defrag tests/examples
+          # Use explicit path to config and files to be checked
+          ruff check --config .ruff.toml defrag tests/examples

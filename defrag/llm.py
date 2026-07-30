@@ -863,7 +863,15 @@ class _OpenAIProvider:
 
         logger.info(f"Initializing OpenAI client with model: {model}")
         self.model = model
-        self.client = OpenAI(api_key=api_key)
+        
+        # Support custom base_url for local LLM servers (llama.cpp, vLLM, Ollama, etc.)
+        base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("DEFRAG_OPENAI_BASE_URL")
+        if base_url:
+            logger.info(f"Using custom OpenAI base_url: {base_url}")
+            self.client = OpenAI(api_key=api_key, base_url=base_url)
+        else:
+            self.client = OpenAI(api_key=api_key)
+            
         self._use_responses_api = model.startswith(self.RESPONSES_MODELS_PREFIXES)
         logger.info("OpenAI client initialized successfully")
 

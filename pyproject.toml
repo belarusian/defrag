@@ -56,4 +56,5 @@ target-version = "py38"
 # I001: import sorting (causes issues with newer ruff versions)
 # SIM105: use implicit boolean comparison (conflicts with style)
 # PLC0415: import inside function (allowed in tests for mocking)
-extend-ignore = ["SIM117", "I001", "SIM105", "PLC0415"]
+# UP024: Replace aliased errors with `OSError`
+extend-ignore = ["SIM117", "I001", "SIM105", "PLC0415", "UP024"]

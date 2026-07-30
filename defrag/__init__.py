@@ -13,13 +13,13 @@ from .schema import DefragIndex, DocEntry
 from .validator import validate_code_refs, validate_doc
 
 __all__ = [
-    "DocEntry",
-    "DefragIndex",
-    "scan_documentation",
-    "scan_code_references",
     "build_index",
+    "DefragIndex",
+    "DocEntry",
     "load_index",
     "save_index",
+    "scan_code_references",
+    "scan_documentation",
     "validate_code_refs",
     "validate_doc",
 ]

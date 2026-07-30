@@ -4,6 +4,8 @@ LLM client for semantic analysis.
 Abstracts LLM API calls for concept extraction and matching.
 """
 
+from __future__ import annotations
+
 import glob
 import json
 import logging

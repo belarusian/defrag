@@ -50,3 +50,7 @@ target-version = ['py38', 'py39', 'py310', 'py311']
 [tool.ruff]
 line-length = 100
 target-version = "py38"
+
+# Skip SIM117 (nested with) because it requires Python 3.9+ syntax
+# while we target py38 compatibility
+extend-ignore = ["SIM117"]

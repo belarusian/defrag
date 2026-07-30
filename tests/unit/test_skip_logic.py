@@ -37,20 +37,22 @@ def test_skip_already_processed_docs(capsys):
         analyzer = SemanticAnalyzer(llm_client=mock_llm, resume_from=tmp_path)
 
         # Try to analyze the same doc (should skip)
-        with patch("defrag.analyzer.extract_markdown_sections") as mock_extract:
-            with patch("defrag.analyzer.compute_file_hash") as mock_hash:
-                mock_extract.return_value = [("intro", "Content", 1, 10)]
-                mock_hash.return_value = "dummy_hash_123"  # Same hash = unchanged file
+        mock_extract_ctx = patch("defrag.analyzer.extract_markdown_sections")
+        mock_hash_ctx = patch("defrag.analyzer.compute_file_hash")
 
-                analyzer.analyze_documentation(["README.md"], verbose=True)
+        with mock_extract_ctx as mock_extract, mock_hash_ctx as mock_hash:
+            mock_extract.return_value = [("intro", "Content", 1, 10)]
+            mock_hash.return_value = "dummy_hash_123"  # Same hash = unchanged file
 
-                # Should NOT have called LLM since doc was already processed
-                mock_llm.extract_doc_concept.assert_not_called()
+            analyzer.analyze_documentation(["README.md"], verbose=True)
 
-                # Check output
-                captured = capsys.readouterr()
-                assert "Skipping unchanged doc: README.md" in captured.out
-                assert "1 concepts" in captured.out
+            # Should NOT have called LLM since doc was already processed
+            mock_llm.extract_doc_concept.assert_not_called()
+
+            # Check output
+            captured = capsys.readouterr()
+            assert "Skipping unchanged doc: README.md" in captured.out
+            assert "1 concepts" in captured.out
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
@@ -270,30 +272,31 @@ def test_processes_new_docs_after_resume():
         analyzer = SemanticAnalyzer(llm_client=mock_llm, resume_from=tmp_path)
 
         # Analyze both old and new docs
-        with patch("defrag.analyzer.extract_markdown_sections") as mock_extract:
-            with patch("defrag.analyzer.compute_file_hash") as mock_hash:
+        mock_extract_ctx = patch("defrag.analyzer.extract_markdown_sections")
+        mock_hash_ctx = patch("defrag.analyzer.compute_file_hash")
 
-                def extract_side_effect(path, root):
-                    if "NEW.md" in path:
-                        return [("section", "New content", 1, 10)]
-                    return [("section", "Old content", 1, 10)]
+        with mock_extract_ctx as mock_extract, mock_hash_ctx as mock_hash:
+            def extract_side_effect(path, root):
+                if "NEW.md" in path:
+                    return [("section", "New content", 1, 10)]
+                return [("section", "Old content", 1, 10)]
 
-                def hash_side_effect(path, root):
-                    if "NEW.md" in path:
-                        return "new_hash_456"  # New file
-                    return "old_hash_123"  # Same hash as before
+            def hash_side_effect(path, root):
+                if "NEW.md" in path:
+                    return "new_hash_456"  # New file
+                return "old_hash_123"  # Same hash as before
 
-                mock_extract.side_effect = extract_side_effect
-                mock_hash.side_effect = hash_side_effect
+            mock_extract.side_effect = extract_side_effect
+            mock_hash.side_effect = hash_side_effect
 
-                analyzer.analyze_documentation(["OLD.md", "NEW.md"], verbose=False)
+            analyzer.analyze_documentation(["OLD.md", "NEW.md"], verbose=False)
 
-                # Should only call LLM for NEW.md
-                assert mock_llm.extract_doc_concept.call_count == 1
+            # Should only call LLM for NEW.md
+            assert mock_llm.extract_doc_concept.call_count == 1
 
-                # Should have both concepts
-                assert len(analyzer.index.concepts) == 2
-                assert "doc:OLD.md:section" in analyzer.index.concepts
-                assert "doc:NEW.md:section" in analyzer.index.concepts
+            # Should have both concepts
+            assert len(analyzer.index.concepts) == 2
+            assert "doc:OLD.md:section" in analyzer.index.concepts
+            assert "doc:NEW.md:section" in analyzer.index.concepts
     finally:
         Path(tmp_path).unlink(missing_ok=True)

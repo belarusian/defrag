@@ -55,7 +55,7 @@ pip install defrag
 Or from source:
 
 ```bash
-git clone https://github.com/kode-s/defrag.git
+git clone https://github.com/belarusian/defrag.git
 cd defrag
 
 # Recommended: create a virtualenv and install deps

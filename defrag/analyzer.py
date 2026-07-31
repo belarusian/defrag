@@ -276,7 +276,7 @@ class SemanticAnalyzer:
         start_line = 1
 
         for i in range(0, len(lines), chunk_size):
-            chunk_lines = lines[i:i + chunk_size]
+            chunk_lines = lines[i : i + chunk_size]
             chunk = "\n".join(chunk_lines)
 
             if len(chunk) > 10000:
@@ -284,9 +284,7 @@ class SemanticAnalyzer:
 
             try:
                 concept_data = self.llm.extract_code_concept(
-                    file_path,
-                    f"chunk_{i // chunk_size}",
-                    chunk
+                    file_path, f"chunk_{i // chunk_size}", chunk
                 )
 
                 end_line = i + len(chunk_lines)

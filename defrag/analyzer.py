@@ -228,6 +228,92 @@ class SemanticAnalyzer:
         if current_hash:
             self.index.update_file_hash(file_path, current_hash)
 
+    def analyze_non_python_code_file(self, file_path: str, verbose: bool = False) -> None:
+        """
+        Analyze non-Python code file using LLM on raw source chunks.
+
+        For languages like TypeScript, JavaScript, Go, etc. where we don't have
+        a native AST parser, we extract concepts by sending code chunks to LLM.
+
+        Args:
+            file_path: Path to code file
+            verbose: Print progress
+        """
+        current_hash = compute_file_hash(file_path, self.root_dir)
+        stored_hash = self.index.get_file_hash(file_path)
+
+        existing_concepts = [
+            c
+            for c in self.index.concepts.values()
+            if c.source_type == "code" and c.source == file_path
+        ]
+
+        if existing_concepts and current_hash and current_hash == stored_hash:
+            if verbose:
+                print(f"  Skipping unchanged: {file_path} ({len(existing_concepts)} concepts)")
+            return
+
+        if existing_concepts and current_hash and current_hash != stored_hash:
+            if verbose:
+                print(f"  File changed, reprocessing: {file_path}")
+            self.index.remove_concepts_for_file(file_path, "code")
+
+        full_path = os.path.join(self.root_dir, file_path)
+
+        if not os.path.exists(full_path):
+            return
+
+        try:
+            with open(full_path, "r", encoding="utf-8") as f:
+                source = f.read()
+        except UnicodeDecodeError:
+            if verbose:
+                print(f"  Warning: Could not read {file_path}")
+            return
+
+        lines = source.split("\n")
+        chunk_size = 50
+        start_line = 1
+
+        for i in range(0, len(lines), chunk_size):
+            chunk_lines = lines[i:i + chunk_size]
+            chunk = "\n".join(chunk_lines)
+
+            if len(chunk) > 10000:
+                continue
+
+            try:
+                concept_data = self.llm.extract_code_concept(
+                    file_path,
+                    f"chunk_{i // chunk_size}",
+                    chunk
+                )
+
+                end_line = i + len(chunk_lines)
+                concept = Concept(
+                    id=make_concept_id(file_path, "code", f"chunk_{i // chunk_size}"),
+                    source=file_path,
+                    source_type="code",
+                    location=f"chunk_{i // chunk_size}",
+                    description=concept_data["description"],
+                    keywords=concept_data["keywords"],
+                    line_range=(start_line, end_line),
+                    raw_content=chunk[:500],
+                )
+                self.index.add_concept(concept)
+
+                if verbose:
+                    print(f"  - chunk_{i // chunk_size}: {concept.description[:60]}...")
+
+            except ValueError as exc:
+                if verbose:
+                    print(f"  Warning: Failed to extract concept from chunk: {exc}")
+
+            start_line = end_line + 1
+
+        if current_hash:
+            self.index.update_file_hash(file_path, current_hash)
+
     def analyze_code_files(self, code_paths: List[str], verbose: bool = False) -> None:
         """
         Analyze code files and extract concepts.
@@ -242,7 +328,8 @@ class SemanticAnalyzer:
 
             if code_path.endswith(".py"):
                 self.analyze_python_file(code_path, verbose)
-            # Add support for other languages here (TypeScript, etc.)
+            else:
+                self.analyze_non_python_code_file(code_path, verbose)
 
     def match_all_concepts(self, verbose: bool = False, max_iterations: int = 1) -> None:
         """

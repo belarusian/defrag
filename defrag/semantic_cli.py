@@ -539,6 +539,72 @@ def cmd_semantic_fix(args):
     return 0
 
 
+def cmd_semantic_autodoc(args):
+    """Generate conceptual documentation for undocumented code."""
+    print("=== Semantic Auto-Doc ===")
+    print(f"Root: {args.root}")
+    provider = args.provider or os.getenv(LLMClient.PROVIDER_ENV_VAR) or "openai"
+    provider = provider.lower()
+    default_model = LLMClient.DEFAULT_MODELS.get(provider, "unknown")
+    print(f"Provider: {provider}")
+    if args.model:
+        print(f"Model: {args.model}")
+    else:
+        print(f"Model: {default_model} (default)")
+    print()
+
+    index_path = _resolve_index_path(args.semantic_index, args.root)
+    if not os.path.exists(index_path):
+        print(f"Error: Semantic index not found at {index_path}")
+        print("Run 'defrag semantic-analyze' first to generate the index.")
+        return 1
+
+    print(f"Loading semantic index from {index_path}...")
+    try:
+        index = SemanticIndex.load(index_path)
+        print(f"Loaded {len(index.concepts)} concepts, {len(index.matches)} matches")
+    except Exception as e:
+        print(f"Error loading semantic index: {e}")
+        return 1
+
+    print("\nInitializing LLM client...")
+    llm = LLMClient(
+        model=args.model,
+        provider=provider,
+        api_key=args.api_key,
+        root_dir=args.root,
+    )
+    print("LLM client ready")
+
+    print("\nGenerating conceptual documentation for undocumented code...")
+    generated_docs, concept_map = generate_conceptual_docs_for_undocumented_code(
+        index,
+        llm,
+        args.root,
+        min_confidence=args.min_confidence,
+        dry_run=not args.apply,
+        verbose=False,
+    )
+
+    if generated_docs:
+        doc_count = len(generated_docs)
+        action = "Generated" if args.apply else "Would generate"
+        print(f"  {action} {doc_count} conceptual documentation file(s):")
+        for doc_path in sorted(generated_docs.keys()):
+            print(f"    - {doc_path}")
+    else:
+        print("  All code is already documented")
+
+    print("\n=== Summary ===")
+    if generated_docs:
+        action = "Created" if args.apply else "Would create"
+        print(f"{action} {len(generated_docs)} conceptual documentation files")
+    else:
+        print("Documentation and code are in sync - no new docs needed")
+
+    return 0
+
+
 def add_semantic_commands(subparsers, parent_parser):
     """
     Add semantic analysis commands to CLI.
@@ -640,9 +706,40 @@ def add_semantic_commands(subparsers, parent_parser):
         help="Resume a previous semantic-fix run (skips completed docs and generated concepts)",
     )
 
+    # semantic-autodoc command
+    parser_autodoc = subparsers.add_parser(
+        "semantic-autodoc",
+        help="Generate conceptual documentation for undocumented code",
+        parents=[parent_parser],
+    )
+    parser_autodoc.add_argument(
+        "--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file"
+    )
+    parser_autodoc.add_argument("--apply", action="store_true", help="Apply changes (default: dry run)")
+    parser_autodoc.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.5,
+        help="Minimum confidence threshold (default: 0.5)",
+    )
+    parser_autodoc.add_argument(
+        "--provider",
+        choices=sorted(LLMClient.SUPPORTED_PROVIDERS),
+        help="LLM provider (default: env DEFRAG_LLM_PROVIDER or openai)",
+    )
+    parser_autodoc.add_argument(
+        "--model",
+        help="LLM model (defaults per provider)",
+    )
+    parser_autodoc.add_argument(
+        "--api-key",
+        help="API key for LLM provider",
+    )
+
     return {
         "semantic-analyze": cmd_semantic_analyze,
         "semantic-report": cmd_semantic_report,
         "semantic-validate": cmd_semantic_validate,
         "semantic-fix": cmd_semantic_fix,
+        "semantic-autodoc": cmd_semantic_autodoc,
     }

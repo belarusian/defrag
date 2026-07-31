@@ -75,10 +75,23 @@ defrag index                    # Catalog documentation
 defrag validate --doc README.md  # Check links
 defrag report                   # Show status
 
-# Semantic analysis (set provider + API key)
-# OpenAI GPT-4o (default):
+# Semantic analysis (using local LLM or cloud provider)
+
+## Using Local LLM (llama.cpp, vLLM, Ollama, etc.)
+```bash
+# Set local LLM endpoint and dummy API key
+export OPENAI_BASE_URL=http://192.168.1.157:8080/v1
+export OPENAI_API_KEY=dummy
+
+defrag semantic-analyze --verbose --provider openai --model Qwen3.6-27B-UD-Q4_K_XL.gguf
+```
+
+## Using Cloud Provider (OpenAI/Anthropic)
+```bash
+# OpenAI GPT-4o:
 export OPENAI_API_KEY=your_key_here
-# Anthropic (optional override):
+
+# Anthropic Claude (optional override):
 # export DEFRAG_LLM_PROVIDER=anthropic
 # export ANTHROPIC_API_KEY=your_key_here
 # export DEFRAG_LLM_MODEL=claude-sonnet-4-5-20250929   # optional override
@@ -174,7 +187,9 @@ defrag gc --show                          # Show GC candidates
 ### Semantic Layer (LLM-Powered)
 
 ```bash
-# Requires provider + API key (ANTHROPIC_API_KEY or OPENAI_API_KEY)
+# Configure LLM provider and model:
+# - Local LLM: Set OPENAI_BASE_URL=http://your-local-llm:port/v1 and OPENAI_API_KEY=dummy
+# - Cloud provider: Set OPENAI_API_KEY or ANTHROPIC_API_KEY
 
 defrag semantic-analyze [options]
   --provider NAME         LLM provider (anthropic | openai)
@@ -224,7 +239,7 @@ See `examples/` for:
 ## Requirements
 
 - Python 3.8+
-- OpenAI or Anthropic API key (for semantic analysis)
+- LLM endpoint (local via OPENAI_BASE_URL with dummy API key, or cloud provider via OPENAI_API_KEY/ANTHROPIC_API_KEY)
 
 ## License
 

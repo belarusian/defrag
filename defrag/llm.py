@@ -224,7 +224,7 @@ class LLMClient:
     @staticmethod
     def _build_parse_retry_prompt(error: Exception, original_raw: str) -> str:
         """Build prompt instructing the model to return valid JSON."""
-        return f"""Your previous response could not be parsed as JSON. Here's the error:
+        return f"""Your previous response was not valid JSON. You returned prose instead of JSON.
 
 Error: {error}
 
@@ -233,7 +233,15 @@ Your original response was:
 {original_raw[:1000]}
 ```
 
-Please respond with valid JSON only, with no additional text or markdown."""
+You MUST respond with valid JSON only. No markdown, no explanation, no prose.
+Just a JSON object with:
+- "description": a one-sentence string describing what this code does
+- "keywords": a list of 3-5 relevant keyword strings
+
+Example:
+{{"description": "Handles HTTP request routing", "keywords": ["routing", "HTTP"]}}
+
+Respond with JSON only:"""
 
     def _parse_json_with_retry(self, raw_text: str, fallback: any):
         """
@@ -497,11 +505,15 @@ Location: {location}
 Code:
 {code_snippet[:2000]}
 
-Respond with JSON only:
-{{
-  "description": "One-sentence description of what this code does conceptually",
-  "keywords": ["key", "concepts", "list"]
-}}"""
+IMPORTANT: You MUST respond with valid JSON only. No markdown, no explanation, no prose.
+Just a JSON object with exactly these fields:
+- "description": a one-sentence string describing what this code does
+- "keywords": a list of 3-5 relevant keyword strings
+
+Example:
+{{"description": "Handles HTTP request routing and middleware", "keywords": ["routing", "middleware", "HTTP"]}}
+
+Respond with JSON only:"""
 
         return self._request_json(
             prompt,

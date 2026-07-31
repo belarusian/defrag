@@ -715,7 +715,9 @@ def add_semantic_commands(subparsers, parent_parser):
     parser_autodoc.add_argument(
         "--semantic-index", default=DEFAULT_SEMANTIC_INDEX, help="Semantic index file"
     )
-    parser_autodoc.add_argument("--apply", action="store_true", help="Apply changes (default: dry run)")
+    parser_autodoc.add_argument(
+        "--apply", action="store_true", help="Apply changes (default: dry run)"
+    )
     parser_autodoc.add_argument(
         "--min-confidence",
         type=float,

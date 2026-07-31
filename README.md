@@ -75,36 +75,20 @@ defrag index                    # Catalog documentation
 defrag validate --doc README.md  # Check links
 defrag report                   # Show status
 
-# Semantic analysis (using local LLM or cloud provider)
-
-## Using Local LLM (llama.cpp, vLLM, Ollama, etc.)
-```bash
+# Semantic analysis (using local LLM)
 # Set local LLM endpoint and dummy API key
 export OPENAI_BASE_URL=http://192.168.1.157:8080/v1
 export OPENAI_API_KEY=dummy
 
 defrag semantic-analyze --verbose --provider openai --model Qwen3.6-27B-UD-Q4_K_XL.gguf
-```
-
-## Using Cloud Provider (OpenAI/Anthropic)
-```bash
-# OpenAI GPT-4o:
-export OPENAI_API_KEY=your_key_here
-
-# Anthropic Claude (optional override):
-# export DEFRAG_LLM_PROVIDER=anthropic
-# export ANTHROPIC_API_KEY=your_key_here
-# export DEFRAG_LLM_MODEL=claude-sonnet-4-5-20250929   # optional override
-
-defrag semantic-analyze --verbose        # Full analysis
-defrag semantic-analyze --verbose --resume  # Resume and skip unchanged files
-defrag semantic-report --show-gc         # View results
-defrag semantic-validate --verbose       # Check discrepancies
+defrag semantic-analyze --verbose --resume      # Resume and skip unchanged files
+defrag semantic-report --show-gc                # View results
+defrag semantic-validate --verbose              # Check discrepancies
 
 # Auto-fix missing links
-defrag semantic-fix --doc README.md --preview  # Preview
-defrag semantic-fix --doc README.md --apply    # Apply
-defrag semantic-fix --apply --resume           # Continue after crash
+defrag semantic-fix --doc README.md --preview   # Preview changes
+defrag semantic-fix --doc README.md --apply     # Apply changes
+defrag semantic-fix --apply --resume            # Resume interrupted fix run
 ```
 
 ## How It Works
@@ -187,30 +171,34 @@ defrag gc --show                          # Show GC candidates
 ### Semantic Layer (LLM-Powered)
 
 ```bash
-# Configure LLM provider and model:
-# - Local LLM: Set OPENAI_BASE_URL=http://your-local-llm:port/v1 and OPENAI_API_KEY=dummy
-# - Cloud provider: Set OPENAI_API_KEY or ANTHROPIC_API_KEY
+# Configure LLM: Set OPENAI_BASE_URL=http://your-local-llm:port/v1 and OPENAI_API_KEY=dummy
 
 defrag semantic-analyze [options]
-  --provider NAME         LLM provider (anthropic | openai)
-  --model MODEL           LLM model (defaults per provider)
+  --provider NAME         LLM provider (openai)
+  --model MODEL           LLM model
   --api-key KEY           Override API key
   --limit-docs N          Limit docs for testing
   --limit-code N          Limit code files for testing
   --verbose               Show progress
+  --output OUTPUT         Output file for semantic index
+  --resume                Resume from existing index
 
 defrag semantic-report [options]
+  --semantic-index PATH   Semantic index file
   --doc PATH              Show matches for specific doc
   --show-gc               Show GC candidates
 
 defrag semantic-validate [options]
+  --semantic-index PATH   Semantic index file
   --verbose               Show detailed discrepancies
 
 defrag semantic-fix [options]
+  --semantic-index PATH   Semantic index file
   --doc PATH              Fix specific doc (default: all)
   --preview               Preview without applying
-  --apply                 Apply changes (default: dry run)
+  --apply                 Apply changes
   --min-confidence N      Min confidence threshold (default: 0.7)
+  --resume                Resume a previous fix run
 ```
 
 ## Architecture
@@ -222,7 +210,7 @@ defrag/
 ├── indexer.py        # Index persistence
 ├── validator.py      # Physical link validation
 ├── semantic.py       # Semantic models
-├── llm.py            # LLM client (OpenAI/Anthropic)
+├── llm.py            # LLM client (OpenAI-compatible API)
 ├── analyzer.py       # Semantic analysis orchestrator
 ├── fixer.py          # Auto-fix missing links
 ├── cli.py            # CLI interface
@@ -239,7 +227,7 @@ See `examples/` for:
 ## Requirements
 
 - Python 3.8+
-- LLM endpoint (local via OPENAI_BASE_URL with dummy API key, or cloud provider via OPENAI_API_KEY/ANTHROPIC_API_KEY)
+- LLM endpoint (local via OPENAI_BASE_URL with dummy API key)
 
 ## License
 

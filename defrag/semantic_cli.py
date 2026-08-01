@@ -241,13 +241,18 @@ def cmd_semantic_analyze(args):
 
     # Step 3: Match concepts (with automatic iterative refinement)
     progress.section("Step 3: Concept Matching")
+    max_iter = getattr(args, "max_iterations", 1)
     progress.log(
         f"Matching {code_concept_count} code concepts to {doc_concept_count} doc concepts..."
     )
-    progress.log("(automatic iterative refinement enabled for low-confidence matches)")
+    if max_iter == 0:
+        progress.log("(iterative refinement disabled)")
+    else:
+        progress.log(f"(automatic iterative refinement enabled, max {max_iter} iteration(s))")
     progress.update_state("matching_concepts")
-    print("[3/4] Matching code to documentation (with automatic refinement)...")
-    analyzer.match_all_concepts(verbose=args.verbose)
+    refine_label = "no refinement" if max_iter == 0 else "with automatic refinement"
+    print(f"[3/4] Matching code to documentation ({refine_label})...")
+    analyzer.match_all_concepts(verbose=args.verbose, max_iterations=max_iter)
     match_count = len(analyzer.index.matches)
     high_conf_count = sum(1 for m in analyzer.index.matches if m.confidence >= 0.7)
     refined_count = sum(1 for m in analyzer.index.matches if m.iterations > 1)
@@ -643,6 +648,12 @@ def add_semantic_commands(subparsers, parent_parser):
     parser_analyze.add_argument("--limit-docs", type=int, help="Limit number of docs (for testing)")
     parser_analyze.add_argument(
         "--limit-code", type=int, help="Limit number of code files (for testing)"
+    )
+    parser_analyze.add_argument(
+        "--max-iterations",
+        type=int,
+        default=0,
+        help="Max refinement iterations for matching (default: 0 = disabled)",
     )
     parser_analyze.add_argument("--verbose", action="store_true", help="Verbose output")
 

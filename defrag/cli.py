@@ -102,6 +102,10 @@ def cmd_validate(args):
             save_index(index, args.index)
             print("\nIndex updated with validation results")
 
+        if args.strict and bad_count > 0:
+            print(f"\n[strict] {bad_count} bad document(s) — failing gate")
+            return 1
+
     return 0
 
 
@@ -256,6 +260,11 @@ def main():
     parser_validate.add_argument("--doc", help="Specific document to validate")
     parser_validate.add_argument(
         "--auto-mark", action="store_true", help="Automatically update status"
+    )
+    parser_validate.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if any document is BAD (CI gate)",
     )
 
     # mark command

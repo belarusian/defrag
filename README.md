@@ -221,8 +221,6 @@ defrag/
 
 See `examples/` for:
 - `icegraph_demo.py` - Analyzing a real project
-- `simple_demo.py` - Basic usage
-- `ci_integration.py` - GitHub Actions integration
 
 ## Requirements
 
